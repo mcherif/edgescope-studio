@@ -1,0 +1,8 @@
+detector:
+  name: yolox_s
+  device: cuda
+  score_threshold: 0.3
+
+segmentor:
+  name: sam_vit_b
+  device: cuda
