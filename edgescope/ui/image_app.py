@@ -25,6 +25,36 @@ SAM_CHECKPOINT = next((p for p in _sam_candidates if p.exists()), _sam_candidate
 
 KEEP_CLASSES, CLASS_ALIASES, SAM_TARGETS_DEFAULT = load_classes_config()
 
+
+ICON_MAP = {
+    "person": "🧍",
+    "chair": "💺",
+    "monitor": "🖥️",
+    "laptop": "💻",
+    "keyboard": "⌨️",
+    "mouse": "🖱️",
+    "cup": "☕",
+    "bottle": "🥤",
+    "backpack": "🎒",
+    "book": "📚",
+    "clock": "⏰",
+    "tv": "📺",
+    "screen": "🖥️",
+}
+
+
+def _label_with_icon(label: str) -> str:
+    icon = ICON_MAP.get(label, "")
+    return f"{icon} {label}" if icon else label
+
+
+def _strip_icon(label_with_icon: str) -> str:
+    # Split on first space to drop emoji, fallback to original
+    parts = label_with_icon.strip().split(" ", 1)
+    if len(parts) == 2 and parts[0] and parts[0][0] != parts[0][-1]:  # crude emoji check
+        return parts[1]
+    return label_with_icon.strip()
+
 detector = RTMDetDetector(
     config_path=str(RTMDET_CONFIG),
     checkpoint_path=str(RTMDET_CHECKPOINT),
@@ -39,7 +69,7 @@ sam_segmenter = SamSegmenter(
 )
 
 
-def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets: list[str]) -> np.ndarray:
+def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets_display: list[str]) -> np.ndarray:
     """
     Gradio callback: takes an RGB image, runs RTMDet with given confidence,
     optionally overlays SAM masks, and returns an annotated RGB image.
@@ -84,24 +114,25 @@ def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets: 
 
     # Optional SAM masks overlay
     if show_masks and detections:
-        # Restrict to user selection (fall back to defaults if empty)
-        targets = sam_targets or SAM_TARGETS_DEFAULT
+        targets = [_strip_icon(t) for t in (sam_targets_display or [])]
         targets = [t for t in targets if t in KEEP_CLASSES]
-        mask_results: list[MaskResult] = sam_segmenter.segment(image, detections, targets)
 
-        overlay = vis_bgr.copy()
-        palette = [
-            (0, 255, 0),
-            (0, 200, 255),
-            (255, 200, 0),
-            (200, 0, 255),
-            (255, 128, 0),
-        ]
-        for idx, mr in enumerate(mask_results):
-            color = palette[idx % len(palette)]
-            overlay[mr.mask] = color
-        alpha = 0.4
-        vis_bgr = cv2.addWeighted(overlay, alpha, vis_bgr, 1 - alpha, 0)
+        if targets:
+            mask_results: list[MaskResult] = sam_segmenter.segment(image, detections, targets)
+
+            overlay = vis_bgr.copy()
+            palette = [
+                (0, 255, 0),
+                (0, 200, 255),
+                (255, 200, 0),
+                (200, 0, 255),
+                (255, 128, 0),
+            ]
+            for idx, mr in enumerate(mask_results):
+                color = palette[idx % len(palette)]
+                overlay[mr.mask] = color
+            alpha = 0.4
+            vis_bgr = cv2.addWeighted(overlay, alpha, vis_bgr, 1 - alpha, 0)
 
     # Boxes + labels
     for det in detections:
@@ -140,9 +171,11 @@ def create_app() -> gr.Blocks:
             label="Confidence threshold",
         )
         show_masks = gr.Checkbox(label="Show SAM masks", value=True)
+        sam_choices = [_label_with_icon(c) for c in sorted(KEEP_CLASSES)]
+        sam_default = [_label_with_icon(c) for c in SAM_TARGETS_DEFAULT]
         sam_targets = gr.CheckboxGroup(
-            choices=sorted(KEEP_CLASSES),
-            value=SAM_TARGETS_DEFAULT,
+            choices=sam_choices,
+            value=sam_default,
             label="SAM target classes",
         )
 
