@@ -49,11 +49,9 @@ def _label_with_icon(label: str) -> str:
 
 
 def _strip_icon(label_with_icon: str) -> str:
-    # Split on first space to drop emoji, fallback to original
+    # Drop the first token (emoji) if present; otherwise return as-is.
     parts = label_with_icon.strip().split(" ", 1)
-    if len(parts) == 2 and parts[0] and parts[0][0] != parts[0][-1]:  # crude emoji check
-        return parts[1]
-    return label_with_icon.strip()
+    return parts[1] if len(parts) == 2 else parts[0]
 
 detector = RTMDetDetector(
     config_path=str(RTMDET_CONFIG),
