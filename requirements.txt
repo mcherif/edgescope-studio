@@ -15,3 +15,6 @@ mmdet==3.3.0
 gradio==5.10.0
 gradio-client==1.5.3
 huggingface-hub==1.1.7
+matplotlib==3.10.7
+# SAM dependency
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git@dca509fe793f601edb92606367a655c15ac00fdf
