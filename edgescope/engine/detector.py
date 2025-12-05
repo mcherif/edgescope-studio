@@ -99,7 +99,6 @@ class RTMDetDetector:
             image = image.astype(np.uint8)
 
         # MMDetection expects BGR ndarray when passing images directly
-        # image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         image_bgr = np.ascontiguousarray(image[..., ::-1])
 
         result = inference_detector(self.model, image_bgr)

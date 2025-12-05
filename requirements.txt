@@ -9,7 +9,9 @@ torchvision==0.16.2+cu121
 torchaudio==2.1.2+cu121
 numpy==1.26.4
 opencv-python==4.11.0.86
-gradio==5.10.0
 mmengine==0.10.4
 mmcv==2.1.0
 mmdet==3.3.0
+gradio==5.10.0
+gradio-client==1.5.3
+huggingface-hub==1.1.7
