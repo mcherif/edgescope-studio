@@ -12,7 +12,14 @@ from edgescope.config import PROJECT_ROOT, load_classes_config
 # RTMDet config + checkpoint
 RTMDET_CONFIG = PROJECT_ROOT / "rtmdet" / "rtmdet_tiny_8xb32-300e_coco.py"
 RTMDET_CHECKPOINT = PROJECT_ROOT / "rtmdet" / "rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
-SAM_CHECKPOINT = PROJECT_ROOT / "sam" / "sam_vit_b.pth"
+
+# SAM checkpoint (prefer the official filename if present)
+_sam_dir = PROJECT_ROOT / "sam"
+_sam_candidates = [
+    _sam_dir / "sam_vit_b_01ec64.pth",  # official ViT-B
+    _sam_dir / "sam_vit_b.pth",
+]
+SAM_CHECKPOINT = next((p for p in _sam_candidates if p.exists()), _sam_candidates[0])
 
 KEEP_CLASSES, CLASS_ALIASES = load_classes_config()
 
