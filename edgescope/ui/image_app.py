@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 import gradio as gr
 import cv2
 import numpy as np
@@ -21,7 +23,7 @@ _sam_candidates = [
 ]
 SAM_CHECKPOINT = next((p for p in _sam_candidates if p.exists()), _sam_candidates[0])
 
-KEEP_CLASSES, CLASS_ALIASES = load_classes_config()
+KEEP_CLASSES, CLASS_ALIASES, SAM_TARGETS_DEFAULT = load_classes_config()
 
 detector = RTMDetDetector(
     config_path=str(RTMDET_CONFIG),
@@ -37,7 +39,7 @@ sam_segmenter = SamSegmenter(
 )
 
 
-def run_pipeline(image: np.ndarray, conf: float, show_masks: bool) -> np.ndarray:
+def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets: list[str]) -> np.ndarray:
     """
     Gradio callback: takes an RGB image, runs RTMDet with given confidence,
     optionally overlays SAM masks, and returns an annotated RGB image.
@@ -82,8 +84,10 @@ def run_pipeline(image: np.ndarray, conf: float, show_masks: bool) -> np.ndarray
 
     # Optional SAM masks overlay
     if show_masks and detections:
-        target_labels = ["person", "chair", "monitor", "laptop"]
-        mask_results: list[MaskResult] = sam_segmenter.segment(image, detections, target_labels)
+        # Restrict to user selection (fall back to defaults if empty)
+        targets = sam_targets or SAM_TARGETS_DEFAULT
+        targets = [t for t in targets if t in KEEP_CLASSES]
+        mask_results: list[MaskResult] = sam_segmenter.segment(image, detections, targets)
 
         overlay = vis_bgr.copy()
         palette = [
@@ -136,12 +140,17 @@ def create_app() -> gr.Blocks:
             label="Confidence threshold",
         )
         show_masks = gr.Checkbox(label="Show SAM masks", value=True)
+        sam_targets = gr.CheckboxGroup(
+            choices=sorted(KEEP_CLASSES),
+            value=SAM_TARGETS_DEFAULT,
+            label="SAM target classes",
+        )
 
         run_btn = gr.Button("Run pipeline")
 
         run_btn.click(
             fn=run_pipeline,
-            inputs=[inp, conf_slider, show_masks],
+            inputs=[inp, conf_slider, show_masks, sam_targets],
             outputs=out,
         )
 

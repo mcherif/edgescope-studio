@@ -17,4 +17,12 @@ classes:
 aliases:
   tv: monitor
   tvmonitor: monitor
+
+# Labels to send to SAM for mask generation (must be in "classes").
+# If empty, all classes are used.
+sam_targets:
+  - person
+  - chair
+  - monitor
+  - laptop
   screen: monitor
