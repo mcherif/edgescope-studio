@@ -1,4 +1,15 @@
-torch
-numpy
-opencv-python
-gradio
+# Default to the CPU mmcv build; swap "cpu" with "cu121" if you want the CUDA 12.1 wheel.
+# Default to the CUDA 12.1 mmcv wheel for torch 2.1.x. Swap "cu121" if you use a different CUDA toolkit.
+--find-links https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
+# Pull CUDA PyTorch wheels from the official index.
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+torch==2.1.2+cu121
+torchvision==0.16.2+cu121
+torchaudio==2.1.2+cu121
+numpy==1.26.4
+opencv-python==4.11.0.86
+gradio==5.10.0
+mmengine==0.10.4
+mmcv==2.1.0
+mmdet==3.3.0

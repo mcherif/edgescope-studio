@@ -1,0 +1,19 @@
+# Bytecode / cache
+__pycache__/
+*.py[cod]
+
+# Model weights and large artifacts
+*.pth
+rtmdet/
+
+# App/cache outputs
+data/cache/
+*.log
+
+# Virtualenvs
+.venv/
+env/
+venv/
+
+# VS Code settings
+.vscode/
