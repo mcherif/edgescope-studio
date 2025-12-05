@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # Bind to localhost with a fixed port; adjust if 7860 is occupied.
     app.launch(
         server_name="127.0.0.1",
-        server_port=7860,
+        server_port=None,  # pick a free port automatically
         share=False,
         show_api=False,
         inbrowser=False,
