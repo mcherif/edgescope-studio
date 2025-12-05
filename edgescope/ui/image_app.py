@@ -6,16 +6,16 @@ import gradio as gr
 import cv2
 import numpy as np
 
-from edgescope.engine.detector import RTMDetDetector
+from edgescope.engine.detector import RTMDetDetector, Detection
 from edgescope.engine.segmentor import DummySegmentor
+from edgescope.config import PROJECT_ROOT, load_classes_config
 
-# Locate project root (edgescope-studio/)
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # RTMDet config + checkpoint
 RTMDET_CONFIG = PROJECT_ROOT / "rtmdet" / "rtmdet_tiny_8xb32-300e_coco.py"
 RTMDET_CHECKPOINT = PROJECT_ROOT / "rtmdet" / \
     "rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
 
+KEEP_CLASSES, CLASS_ALIASES = load_classes_config()
 
 detector = RTMDetDetector(
     config_path=str(RTMDET_CONFIG),
@@ -37,6 +37,45 @@ def run_pipeline(image: np.ndarray, conf: float) -> np.ndarray:
     # Gradio gives RGB uint8
     detector.score_threshold = conf
     detections = detector.detect(image)
+
+    # remap & filter using config/classes.yaml
+    filtered: list[Detection] = []
+    for d in detections:
+        label = CLASS_ALIASES.get(d.label, d.label)  # apply alias if any
+        if label not in KEEP_CLASSES:
+            continue
+
+        filtered.append(
+            Detection(
+                x1=d.x1,
+                y1=d.y1,
+                x2=d.x2,
+                y2=d.y2,
+                score=d.score,
+                label_id=d.label_id,
+                label=label,
+            )
+        )
+
+    # detections = filtered
+    # MIN_SIZE = 20  # pixels
+    # detections = [
+    #     d for d in filtered
+    #     if (d.x2 - d.x1) >= MIN_SIZE and (d.y2 - d.y1) >= MIN_SIZE
+    # ]
+    H, W, _ = image.shape
+    short_side = min(H, W)
+
+    # e.g. keep boxes that are at least 3% of the shorter side
+    min_side = 0.03 * short_side  # 3%; adjust up/down later
+
+    detections = []
+    for d in filtered:
+        w = d.x2 - d.x1
+        h = d.y2 - d.y1
+        if w < min_side or h < min_side:
+            continue
+        detections.append(d)
 
     # Draw boxes on a BGR copy (OpenCV drawing)
     vis_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)

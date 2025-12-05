@@ -7,3 +7,14 @@ classes:
   - bottle
   - cell phone
   - backpack
+  - keyboard
+  - mouse
+  - book
+  - clock
+  - tv
+  - screen
+
+aliases:
+  tv: monitor
+  tvmonitor: monitor
+  screen: monitor
