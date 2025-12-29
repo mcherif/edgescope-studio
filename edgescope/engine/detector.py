@@ -88,7 +88,6 @@ class RTMDetDetector:
 
     def detect(self, image: np.ndarray) -> List[Detection]:
         from mmdet.apis import inference_detector
-        import cv2
 
         # Expect RGB uint8, enforce
         if image.ndim != 3 or image.shape[2] != 3:

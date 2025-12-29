@@ -42,6 +42,26 @@ ICON_MAP = {
     "screen": "🖥️",
 }
 
+_PALETTE = [
+    (0, 255, 0),
+    (0, 200, 255),
+    (255, 200, 0),
+    (200, 0, 255),
+    (255, 128, 0),
+    (120, 180, 255),
+    (255, 105, 180),
+    (180, 255, 120),
+    (50, 50, 255),
+    (255, 50, 50),
+    (50, 255, 50),
+    (255, 0, 125),
+    (0, 125, 255),
+    (125, 0, 255),
+    (0, 255, 125),
+    (125, 255, 0),
+]
+CLASS_COLORS = {label: _PALETTE[idx % len(_PALETTE)] for idx, label in enumerate(sorted(KEEP_CLASSES))}
+
 
 def _label_with_icon(label: str) -> str:
     icon = ICON_MAP.get(label, "")
@@ -52,6 +72,11 @@ def _strip_icon(label_with_icon: str) -> str:
     # Drop the first token (emoji) if present; otherwise return as-is.
     parts = label_with_icon.strip().split(" ", 1)
     return parts[1] if len(parts) == 2 else parts[0]
+
+
+def _color_for_label(label: str) -> tuple[int, int, int]:
+    return CLASS_COLORS.get(label, (0, 255, 0))
+
 
 detector = RTMDetDetector(
     config_path=str(RTMDET_CONFIG),
@@ -67,7 +92,13 @@ sam_segmenter = SamSegmenter(
 )
 
 
-def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets_display: list[str]) -> np.ndarray:
+def run_pipeline(
+    image: np.ndarray,
+    conf: float,
+    show_boxes: bool,
+    show_masks: bool,
+    sam_targets_display: list[str],
+) -> np.ndarray:
     """
     Gradio callback: takes an RGB image, runs RTMDet with given confidence,
     optionally overlays SAM masks, and returns an annotated RGB image.
@@ -119,41 +150,47 @@ def run_pipeline(image: np.ndarray, conf: float, show_masks: bool, sam_targets_d
             mask_results: list[MaskResult] = sam_segmenter.segment(image, detections, targets)
 
             overlay = vis_bgr.copy()
-            palette = [
-                (0, 255, 0),
-                (0, 200, 255),
-                (255, 200, 0),
-                (200, 0, 255),
-                (255, 128, 0),
-            ]
-            for idx, mr in enumerate(mask_results):
-                color = palette[idx % len(palette)]
+            for mr in mask_results:
+                color = _color_for_label(mr.detection.label)
                 overlay[mr.mask] = color
             alpha = 0.4
             vis_bgr = cv2.addWeighted(overlay, alpha, vis_bgr, 1 - alpha, 0)
 
     # Boxes + labels
-    for det in detections:
-        pt1 = int(det.x1), int(det.y1)
-        pt2 = int(det.x2), int(det.y2)
-        cv2.rectangle(vis_bgr, pt1, pt2, (0, 255, 0), 2)
-        label_text = f"{det.label} {det.score:.2f}"
-        cv2.putText(
-            vis_bgr,
-            label_text,
-            (pt1[0], max(0, pt1[1] - 5)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            1,
-            cv2.LINE_AA,
-        )
+    if show_boxes:
+        for det in detections:
+            pt1 = int(det.x1), int(det.y1)
+            pt2 = int(det.x2), int(det.y2)
+            color = _color_for_label(det.label)
+            cv2.rectangle(vis_bgr, pt1, pt2, color, 2)
+            label_text = f"{det.label} {det.score:.2f}"
+            cv2.putText(
+                vis_bgr,
+                label_text,
+                (pt1[0], max(0, pt1[1] - 5)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
 
     vis_rgb = cv2.cvtColor(vis_bgr, cv2.COLOR_BGR2RGB)
     return vis_rgb
 
 
 def create_app() -> gr.Blocks:
+    def apply_add_all(add_all: bool, manual_selection: list[str]):
+        # When enabled, fill the selection with every class; otherwise restore last manual picks.
+        new_value = sam_choices if add_all else manual_selection
+        return gr.update(value=new_value)
+
+    def remember_manual_selection(current: list[str], add_all: bool):
+        # Only store manual selections when "add all" is off so we can restore them later.
+        if add_all:
+            return gr.update()  # keep previous manual selection
+        return current
+
     with gr.Blocks(title="EdgeScope Studio - Image") as demo:
         gr.Markdown("# EdgeScope Studio\nImage demo with RTMDet + SAM.")
 
@@ -168,20 +205,71 @@ def create_app() -> gr.Blocks:
             step=0.01,
             label="Confidence threshold",
         )
+        show_boxes = gr.Checkbox(label="Show boxes + labels", value=True)
         show_masks = gr.Checkbox(label="Show SAM masks", value=True)
         sam_choices = [_label_with_icon(c) for c in sorted(KEEP_CLASSES)]
         sam_default = [_label_with_icon(c) for c in SAM_TARGETS_DEFAULT]
+        manual_sam_targets = gr.State(value=sam_default)
+        sam_add_all = gr.Checkbox(
+            label="Add all SAM classes",
+            value=False,
+            info="Temporarily select every class for segmentation masks.",
+        )
         sam_targets = gr.CheckboxGroup(
             choices=sam_choices,
             value=sam_default,
             label="SAM target classes",
+            info="Labels used to prompt SAM for masks.",
         )
 
         run_btn = gr.Button("Run pipeline")
 
+        inp.change(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        conf_slider.change(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        sam_targets.change(
+            fn=remember_manual_selection,
+            inputs=[sam_targets, sam_add_all],
+            outputs=manual_sam_targets,
+        ).then(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        sam_add_all.change(
+            fn=apply_add_all,
+            inputs=[sam_add_all, manual_sam_targets],
+            outputs=sam_targets,
+        ).then(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        show_boxes.change(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        show_masks.change(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
         run_btn.click(
             fn=run_pipeline,
-            inputs=[inp, conf_slider, show_masks, sam_targets],
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
+            outputs=out,
+        )
+        demo.load(
+            fn=run_pipeline,
+            inputs=[inp, conf_slider, show_boxes, show_masks, sam_targets],
             outputs=out,
         )
 
