@@ -6,6 +6,8 @@ The core idea:
 
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
+![EdgeScope Studio UI](docs/assets/ui-snapshot-image-based-analysis.png)
+
 ## What’s implemented
 
 - Image demo with **RTMDet Tiny (COCO)** for boxes + labels.
