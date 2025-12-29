@@ -1,4 +1,4 @@
-**EdgeScope Studio** is a local-first computer vision lab for rapidly prototyping **detection + segmentation** pipelines on images (and later videos), with everything running **on your own machine, offline**.
+**EdgeScope Studio** is a **local-first** computer vision lab for rapidly prototyping **detection + segmentation** pipelines on images (and later videos), with everything running **on your own machine, offline**.
 
 The core idea:
 
@@ -37,5 +37,20 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle “Sho
 ## Notes
 
 - Detector is COCO-trained; class filtering/aliasing is controlled by `config/classes.yaml`.
-- SAM is class-agnostic; we prompt it with RTMDet boxes (optional target labels in code).
+- SAM is class-agnostic; we prompt it with RTMDet boxes so we only segment detected objects (faster than running SAM across the whole image and it carries the detector’s class labels).
+- Why detection first: without detector boxes you’d have to run SAM’s auto-segmentation over the whole image (more masks, higher latency) and then classify each mask with another model to know the class—slower and less reliable than detect → segment.
 - If the default port is busy, change `server_port` in `scripts/run_image_app.py`.
+- Performance snapshot on RTX 4060 Ti (1024×1536 image): first-run init ~33.4s (detector) + ~3.1s (SAM); per-image after init ~1.5s detector + ~1.1s SAM.
+
+## Benchmark snapshots (steady state, RTX 4060 Ti)
+
+| Resolution        | Detections | Masks | Detector (s) | SAM (s) | Total (s) |
+|-------------------|------------|-------|--------------|---------|-----------|
+| 1024×1536 (orig)  | 39         | 39    | 0.746        | 0.764   | 1.511     |
+| 640×426 (downscale)| 38        | 38    | 0.125        | 0.594   | 0.718     |
+
+Notes: models are already loaded; numbers exclude one-time init.
+
+## Video roadmap (parking lot)
+
+- Goal: add a video page that streams frames through the existing detector + SAM, with stable IDs and mobile-friendly controls. See `docs/video_plan.md` for details.
