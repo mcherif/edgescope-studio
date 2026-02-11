@@ -1,0 +1,127 @@
+{
+  "providers": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "inputs": [
+    {
+      "name": "src",
+      "shape": [
+        "batch_size",
+        3,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r1i",
+      "shape": [
+        "batch_size",
+        "channels",
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r2i",
+      "shape": [
+        "batch_size",
+        "channels",
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r3i",
+      "shape": [
+        "batch_size",
+        "channels",
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r4i",
+      "shape": [
+        "batch_size",
+        "channels",
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "downsample_ratio",
+      "shape": [
+        1
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "fgr",
+      "shape": [
+        "batch_size",
+        3,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "pha",
+      "shape": [
+        "batch_size",
+        1,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r1o",
+      "shape": [
+        "batch_size",
+        16,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r2o",
+      "shape": [
+        "batch_size",
+        20,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r3o",
+      "shape": [
+        "batch_size",
+        40,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "r4o",
+      "shape": [
+        "batch_size",
+        64,
+        "height",
+        "width"
+      ],
+      "type": "tensor(float)"
+    }
+  ]
+}

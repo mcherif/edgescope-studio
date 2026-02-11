@@ -17,3 +17,25 @@ venv/
 
 # VS Code settings
 .vscode/
+
+# ONNX models (downloaded by setup scripts)
+models/*.onnx
+
+
+# Python cache
+__pycache__/
+*.pyc
+
+
+# Local artifacts
+data/
+*.pptx
+
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large model artifacts (downloaded)
+models/*.onnx
+
