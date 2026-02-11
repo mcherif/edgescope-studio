@@ -1,0 +1,49 @@
+{
+  "config": {
+    "camera": 0,
+    "backend": "msmf",
+    "capture_resolution": [
+      1280,
+      720
+    ],
+    "target_fps": 30,
+    "device": "cuda",
+    "model": "models/rvm_mobilenetv3_fp32.onnx",
+    "input_size": 512,
+    "downsample_ratio": 0.25,
+    "blur": false,
+    "blur_downscale": 0.25,
+    "blur_sigma": 8.0,
+    "warmup_frames": 30,
+    "duration_s": 30
+  },
+  "results": {
+    "frames": 899,
+    "elapsed_s": 30.12971829995513,
+    "fps_mean": 29.83765035736623,
+    "capture_ms": {
+      "mean": 14.565427780151367,
+      "p50": 12.285699844360352,
+      "p95": 27.626520729064936,
+      "p99": 35.29421966552734
+    },
+    "infer_ms": {
+      "mean": 18.78512191772461,
+      "p50": 18.78339958190918,
+      "p95": 23.945369338989252,
+      "p99": 25.815515480041498
+    },
+    "comp_ms": {
+      "mean": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "total_ms": {
+      "mean": 33.350547790527344,
+      "p50": 32.09749984741211,
+      "p95": 46.5494213104248,
+      "p99": 52.98576721191405
+    }
+  }
+}

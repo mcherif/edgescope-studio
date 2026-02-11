@@ -30,6 +30,8 @@ __pycache__/
 # Local artifacts
 data/
 *.pptx
+demos/
+scripts/sitecustomize.py
 
 
 # Python cache
