@@ -1,7 +1,7 @@
-*.onnx filter=lfs diff=lfs merge=lfs -text
+* text=auto
 
-*.md text eol=lf
-
-
-*.md text eol=lf
-
+*.py  text eol=lf
+*.md  text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
