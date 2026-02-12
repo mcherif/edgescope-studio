@@ -14,6 +14,8 @@ This is designed as a **general CV tool**, but with a strong focus on **on-devic
 For real-time portrait effects we use **Robust Video Matting (RVM)** (video-native, recurrent temporal states).
 For general object segmentation in still images we use **detect → segment (RTMDet + SAM)**.
 
+RVM is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model “remember” motion and fine hair detail so the mask stays coherent over time.
+
 ![EdgeScope Studio UI](docs/assets/ui-snapshot-image-based-analysis.png)
 
 ## Quick start: Video mode (RVM background blur)
@@ -34,6 +36,8 @@ Benchmark (headless):
 python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --blur --out benchmarks/rvm_512_ds025_720p_blur.json
 python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
+
+Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
 ## What’s implemented
 
