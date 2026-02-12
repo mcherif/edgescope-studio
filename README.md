@@ -122,20 +122,16 @@ Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample
 
 | Blur | FPS (mean)        | Total mean (ms)     | Total p95 (ms)      | Infer mean (ms)     | Infer p95 (ms)      | Comp mean (ms)     | Comp p95 (ms)     |
 |------|-------------------|---------------------|---------------------|---------------------|---------------------|--------------------|-------------------|
-| ON   | 21.285356455308616| 46.92536544799805   | 54.26680908203125   | 20.598535537719727  | 31.321360778808593  | 10.083098411560059 | 12.234370231628418|
-| OFF  | 21.26155004604029 | 46.984901428222656  | 54.732181549072266  | 23.900632858276367  | 33.9217212677002    | 0.0                | 0.0               |
+| ON   | 29.627230977926448| 33.68665313720703   | 41.926300048828125  | 20.098711013793945  | 25.25195026397705   | 10.103943824768066 | 11.418099880218506|
+| OFF  | 29.881036995873803| 33.43109893798828   | 45.76876068115234   | 20.508071899414062  | 27.97229957580566   | 0.0                | 0.0               |
 
 ### How to reproduce
 ```bash
 # Blur ON (backend pinned for reproducibility)
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30 --blur \
-  --out benchmarks/rvm_512_ds025_720p_blur.json
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25   --width 1280 --height 720 --duration 30 --blur   --out benchmarks/rvm_512_ds025_720p_blur.json
 
 # Blur OFF
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30 \
-  --out benchmarks/rvm_512_ds025_720p_no_blur.json
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25   --width 1280 --height 720 --duration 30   --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
 
 **Known issues**

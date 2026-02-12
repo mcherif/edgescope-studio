@@ -70,9 +70,10 @@ class RVMPipeline:
             )
             self.rec = [r1o, r2o, r3o, r4o]
 
-    def reset(self) -> None:
+    def reset(self, verbose: bool = True) -> None:
         self.rec = [np.zeros((1, 1, 1, 1), dtype=np.float32) for _ in range(4)]
-        print("RVM recurrent states reset")
+        if verbose:
+            print("RVM recurrent states reset")
 
     def _preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
         # Resize to model input
