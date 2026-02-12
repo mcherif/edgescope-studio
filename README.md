@@ -118,21 +118,29 @@ Notes: models are already loaded; numbers exclude one-time init.
 
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
-Windows capture backend varies by camera/driver/virtual-cam. EdgeScope can probe MSMF vs DShow and cache the best backend on your system. If results are within 5%, we choose the backend with lower p95 latency.
-If a backend is unstable (warnings or failed health checks), we prefer the stable backend even if raw FPS is similar.
+Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (cached winner on this machine).
 
-Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25`.
-Backend performance varies by camera/driver/virtual-cam; use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
+| Blur | FPS (mean)        | Total mean (ms)     | Total p95 (ms)      | Infer mean (ms)     | Infer p95 (ms)      | Comp mean (ms)     | Comp p95 (ms)     |
+|------|-------------------|---------------------|---------------------|---------------------|---------------------|--------------------|-------------------|
+| ON   | 21.285356455308616| 46.92536544799805   | 54.26680908203125   | 20.598535537719727  | 31.321360778808593  | 10.083098411560059 | 12.234370231628418|
+| OFF  | 21.26155004604029 | 46.984901428222656  | 54.732181549072266  | 23.900632858276367  | 33.9217212677002    | 0.0                | 0.0               |
 
-| Backend | Blur | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
-|---------|------|-------------------|---------------------|---------------------|--------------------|
-| dshow   | ON   | 21.15380108548842 | 54.0599250793457    | 27.775175094604492  | 9.388077735900879  |
-| dshow   | OFF  | 21.32177792750456 | 52.229400634765625  | 27.04789924621582   | 0.0                |
-| msmf    | ON   | 26.248317831749215 | 48.659420013427734  | 24.684019470214842  | 9.228377342224121  |
-| msmf    | OFF  | 29.911379171343338 | 46.91483840942382   | 24.032090950012204  | 0.0                |
+### How to reproduce
+```bash
+# Blur ON (backend pinned for reproducibility)
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 --blur \
+  --out benchmarks/rvm_512_ds025_720p_blur.json
 
-Notes:
-- Compositing is optimized using **uint8 OpenCV ops**; precision impact is small (see `scripts/compare_compositing_precision.py`).
+# Blur OFF
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 \
+  --out benchmarks/rvm_512_ds025_720p_no_blur.json
+```
+
+**Known issues**
+- Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
+- First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
 
 ## Video roadmap (optional)
 

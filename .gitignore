@@ -25,6 +25,3 @@ data/
 *.pptx
 demos/
 scripts/sitecustomize.py
-
-# Benchmark outputs
-benchmarks/*.json
