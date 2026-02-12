@@ -27,3 +27,4 @@ data/
 *.pptx
 demos/
 scripts/sitecustomize.py
+benchmarks/*.mp4

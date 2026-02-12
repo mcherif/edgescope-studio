@@ -44,6 +44,21 @@ def open_camera(
     return cap
 
 
+def open_video(path: str) -> cv2.VideoCapture:
+    return cv2.VideoCapture(path)
+
+
+def read_frame(cap: cv2.VideoCapture, loop: bool) -> tuple[bool, np.ndarray | None]:
+    ok, frame = cap.read()
+    if ok:
+        return True, frame
+    if not loop:
+        return False, None
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    ok, frame = cap.read()
+    return ok, frame if ok else None
+
+
 def jitter_stats(values: List[float]) -> Tuple[float, float]:
     if not values:
         return 0.0, 0.0
@@ -54,13 +69,17 @@ def jitter_stats(values: List[float]) -> Tuple[float, float]:
     return float(arr.mean()), float(np.percentile(arr, 95))
 
 
-def edge_mask(alpha: np.ndarray, grad_thresh: float = 0.02) -> np.ndarray:
+def edge_mask(alpha: np.ndarray, mode: str, grad_thresh: float = 0.02) -> np.ndarray:
     band = (alpha >= 0.1) & (alpha <= 0.9)
     a32 = alpha.astype(np.float32)
     gx = cv2.Sobel(a32, cv2.CV_32F, 1, 0, ksize=3)
     gy = cv2.Sobel(a32, cv2.CV_32F, 0, 1, ksize=3)
     mag = np.sqrt(gx * gx + gy * gy)
     grad = mag > float(grad_thresh)
+    if mode == "band":
+        return band
+    if mode == "grad":
+        return grad
     return band | grad
 
 
@@ -70,9 +89,13 @@ def run_trial(
     pipeline: RVMPipeline,
     reset_each_frame: bool,
 ) -> Dict:
-    cap = open_camera(args.camera, args.width, args.height, args.fps, args.backend)
+    use_video = args.video is not None
+    cap = open_video(args.video) if use_video else open_camera(
+        args.camera, args.width, args.height, args.fps, args.backend
+    )
     if not cap.isOpened():
-        raise RuntimeError(f"ERROR: cannot open camera {args.camera}")
+        source = args.video if use_video else f"camera {args.camera}"
+        raise RuntimeError(f"ERROR: cannot open {source}")
 
     # Camera health check: verify we can read frames and they're not all identical.
     start = time.perf_counter()
@@ -80,25 +103,28 @@ def run_trial(
     last = None
     same_count = 0
     while time.perf_counter() - start < 1.0:
-        ok, frame = cap.read()
+        ok, frame = read_frame(cap, loop=use_video)
         if not ok:
             continue
         got_frame = True
-        if last is not None and frame.shape == last.shape and np.array_equal(frame, last):
-            same_count += 1
-            if same_count >= 5:
-                cap.release()
-                raise RuntimeError("Camera appears inactive/off; temporal results invalid.")
-        else:
-            same_count = 0
+        if not use_video:
+            if last is not None and frame.shape == last.shape and np.array_equal(frame, last):
+                same_count += 1
+                if same_count >= 5:
+                    cap.release()
+                    raise RuntimeError("Camera appears inactive/off; temporal results invalid.")
+            else:
+                same_count = 0
         last = frame
     if not got_frame:
         cap.release()
+        if use_video:
+            raise RuntimeError("Video appears unreadable; temporal results invalid.")
         raise RuntimeError("Camera appears inactive/off; temporal results invalid.")
 
     # Warmup (not counted)
     for _ in range(args.warmup_frames):
-        ok, frame = cap.read()
+        ok, frame = read_frame(cap, loop=use_video)
         if not ok:
             continue
         if reset_each_frame:
@@ -120,7 +146,7 @@ def run_trial(
         if now - start >= args.duration:
             break
 
-        ok, frame = cap.read()
+        ok, frame = read_frame(cap, loop=use_video)
         if not ok:
             continue
 
@@ -133,9 +159,9 @@ def run_trial(
             diff = np.abs(res.alpha - prev_alpha)
             jitters_all.append(float(diff.mean()))
 
-            edge = edge_mask(res.alpha)
+            edge = edge_mask(res.alpha, args.edge_mode, args.edge_grad_thresh)
             if prev_edge is None:
-                prev_edge = edge_mask(prev_alpha)
+                prev_edge = edge_mask(prev_alpha, args.edge_mode, args.edge_grad_thresh)
             mask = edge | prev_edge
             if np.any(mask):
                 jitters_edge.append(float(diff[mask].mean()))
@@ -144,8 +170,7 @@ def run_trial(
 
             prev_edge = edge
         prev_alpha = res.alpha
-        edge_band = (res.alpha >= 0.1) & (res.alpha <= 0.9)
-        edge_fractions.append(float(edge_band.mean()))
+        edge_fractions.append(float(edge_mask(res.alpha, args.edge_mode, args.edge_grad_thresh).mean()))
         frames += 1
 
     cap.release()
@@ -155,6 +180,9 @@ def run_trial(
     jitter_all_mean, jitter_all_p95 = jitter_stats(jitters_all)
     jitter_edge_mean, jitter_edge_p95 = jitter_stats(jitters_edge)
     edge_frac_mean, edge_frac_p95 = jitter_stats(edge_fractions)
+    edge_jitter_per_edgepixel_mean = (
+        jitter_edge_mean / edge_frac_mean if edge_frac_mean > 0 else 0.0
+    )
 
     return {
         "label": label,
@@ -167,6 +195,7 @@ def run_trial(
         "jitter_edge_p95": jitter_edge_p95,
         "edge_fraction_mean": edge_frac_mean,
         "edge_fraction_p95": edge_frac_p95,
+        "edge_jitter_per_edgepixel_mean": edge_jitter_per_edgepixel_mean,
         "reset_each_frame": reset_each_frame,
     }
 
@@ -176,6 +205,8 @@ def main() -> int:
         description="Compare temporal stability with/without recurrent states."
     )
     ap.add_argument("--camera", type=int, default=0)
+    ap.add_argument("--video", type=str, default=None,
+                    help="Optional path to a video file for benchmarking")
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--fps", type=int, default=30)
@@ -188,12 +219,23 @@ def main() -> int:
                     choices=["cuda", "cpu"])
     ap.add_argument("--input-size", type=int, default=512)
     ap.add_argument("--downsample", type=float, default=0.25)
+    ap.add_argument("--edge-mode", type=str, default="band_or_grad",
+                    choices=["band", "grad", "band_or_grad"],
+                    help="Edge definition used for jitter (band, grad, or both)")
+    ap.add_argument("--edge-grad-thresh", type=float, default=0.02,
+                    help="Gradient magnitude threshold for edge detection")
 
     ap.add_argument("--warmup-frames", type=int, default=30)
     ap.add_argument("--duration", type=int, default=30)
     ap.add_argument("--out-on", type=str, default="benchmarks/temporal_on.json")
     ap.add_argument("--out-off", type=str, default="benchmarks/temporal_off.json")
     args = ap.parse_args()
+
+    if args.video is not None:
+        video_path = Path(args.video)
+        if not video_path.exists():
+            print(f"Video not found: {video_path}")
+            return 2
 
     model_path = Path(args.model)
     if not model_path.exists():
@@ -218,6 +260,7 @@ def main() -> int:
     config = {
         "camera": args.camera,
         "backend": args.backend,
+        "video": args.video,
         "capture_resolution": [args.width, args.height],
         "fps": args.fps,
         "device": args.device,
@@ -227,7 +270,8 @@ def main() -> int:
         "warmup_frames": args.warmup_frames,
         "duration_s": args.duration,
         "jitter_edge_band": [0.1, 0.9],
-        "jitter_grad_thresh": 0.02,
+        "jitter_edge_mode": args.edge_mode,
+        "jitter_grad_thresh": args.edge_grad_thresh,
     }
 
     try:
@@ -240,7 +284,8 @@ def main() -> int:
             f"jitter_edge_mean={on['jitter_edge_mean']:.6f} "
             f"jitter_edge_p95={on['jitter_edge_p95']:.6f} "
             f"edge_fraction_mean={on['edge_fraction_mean']*100:.2f}% "
-            f"edge_fraction_p95={on['edge_fraction_p95']*100:.2f}%"
+            f"edge_fraction_p95={on['edge_fraction_p95']*100:.2f}% "
+            f"edge_jitter_per_edgepixel_mean={on['edge_jitter_per_edgepixel_mean']:.6f}"
         )
 
         print("Temporal OFF (reset states every frame)")
@@ -252,7 +297,8 @@ def main() -> int:
             f"jitter_edge_mean={off['jitter_edge_mean']:.6f} "
             f"jitter_edge_p95={off['jitter_edge_p95']:.6f} "
             f"edge_fraction_mean={off['edge_fraction_mean']*100:.2f}% "
-            f"edge_fraction_p95={off['edge_fraction_p95']*100:.2f}%"
+            f"edge_fraction_p95={off['edge_fraction_p95']*100:.2f}% "
+            f"edge_jitter_per_edgepixel_mean={off['edge_jitter_per_edgepixel_mean']:.6f}"
         )
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)

@@ -150,19 +150,29 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
 Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
+Attribution: Pexels video "A woman talking in front of the computer while drinking" (ID 6517471).
+Primary edge definition: Sobel gradient magnitude (threshold 0.02). Auxiliary: alpha band 0.1-0.9.
+We use Sobel(α) magnitude > 0.02 as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
 
-| Mode                    | FPS   | Jitter mean (all) | Jitter p95 (all) | Jitter mean (edge) | Jitter p95 (edge) |
-|-------------------------|-------|-------------------|------------------|--------------------|-------------------|
-| Reset states (OFF)      | 28.03 | 0.00449           | 0.01058          | 0.03587            | 0.08000           |
-| Recurrent states (ON)   | 25.73 | 0.00201           | 0.00639          | 0.02345            | 0.07130           |
-| Improvement             | -8.2% | -55.2%            | -39.6%           | -34.6%             | -10.9%            |
+| Mode                  | FPS   | Jitter mean (all) | Jitter p95 (all) | Jitter mean (edge) | Jitter p95 (edge) | Edge fraction mean | Edge fraction p95 |
+|-----------------------|-------|-------------------|------------------|--------------------|-------------------|--------------------|-------------------|
+| Reset states (OFF)    | 21.15 | 0.00796           | 0.01850          | 0.08246            | 0.16531           | 8.04%              | 10.43%            |
+| Recurrent states (ON) | 23.16 | 0.00466           | 0.01061          | 0.06315            | 0.12750           | 6.19%              | 8.18%             |
 
-Edge jitter tracks boundary flicker (most visible artifact); ON reduces edge jitter mean by ~35%.
+Temporal ON reduced gradient-defined edge jitter by ~23% (0.08246 -> 0.06315) and reduced edge-pixel fraction from 8.04% -> 6.19%, indicating a cleaner, more decisive boundary.
+
+ - Normalized (jitter / edge-pixel fraction): 1.026 -> 1.020 (slight improvement; no evidence of concentrated jitter).
+
+Auxiliary (alpha-band edge): edge jitter mean 0.07998 -> 0.06152, edge fraction mean 4.73% -> 3.29%.
+Note: alpha-band edge sets can shrink/expand with matte softness, which can affect normalized jitter.
 
 ### How to reproduce (temporal jitter)
 ```bash
 python scripts/compare_temporal.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30
+  --width 1280 --height 720 --duration 30 --edge-mode grad --edge-grad-thresh 0.02 \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 \
+  --out-on benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json \
+  --out-off benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json
 ```
 
 Note: This metric is scene-dependent; rerun with real motion to see temporal benefits.
