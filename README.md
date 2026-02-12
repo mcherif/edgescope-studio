@@ -7,7 +7,10 @@ It has two modes:
 
 The core idea:
 
-> Load your images -> run a permissive detector (RTMDet Tiny on COCO) + SAM -> inspect boxes & masks -> iterate on thresholds, models, and logic without touching the cloud.
+- Image mode: load your images -> run a permissive detector (RTMDet Tiny on COCO) + SAM -> inspect boxes & masks -> iterate on thresholds, models, and logic without touching the cloud.
+- Video mode: RVM recurrent states -> alpha matte -> blur compositor.
+
+Video mode uses RVM to produce a temporally-stable alpha matte per frame; no detector/SAM in the loop.
 
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
@@ -112,30 +115,35 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show 
 | Resolution        | Detections | Masks | Detector (s) | SAM (s) | Total (s) |
 |-------------------|------------|-------|--------------|---------|-----------|
 | 1024x1536 (orig)  | 39         | 39    | 0.746        | 0.764   | 1.511     |
-| 640x426 (downscale) | 38        | 38    | 0.125        | 0.594   | 0.718     |
+| 640x426 (downscale) | 38         | 38    | 0.125        | 0.594   | 0.718     |
 
 Notes: models are already loaded; numbers exclude one-time init.
 
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
-Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (cached winner on this machine).
+Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
 
-| Blur | FPS (mean)        | Total mean (ms)     | Total p95 (ms)      | Infer mean (ms)     | Infer p95 (ms)      | Comp mean (ms)     | Comp p95 (ms)     |
-|------|-------------------|---------------------|---------------------|---------------------|---------------------|--------------------|-------------------|
-| ON   | 29.627230977926448| 33.68665313720703   | 41.926300048828125  | 20.098711013793945  | 25.25195026397705   | 10.103943824768066 | 11.418099880218506|
-| OFF  | 29.881036995873803| 33.43109893798828   | 45.76876068115234   | 20.508071899414062  | 27.97229957580566   | 0.0                | 0.0               |
+| Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
+|------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
+| ON   | 29.6       | 33.7            | 41.9           | 20.1            | 25.3           | 10.1           | 11.4          |
+| OFF  | 29.9       | 33.4            | 45.8           | 20.5            | 28.0           | 0.0            | 0.0           |
 
 ### How to reproduce
 ```bash
 # Blur ON (backend pinned for reproducibility)
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25   --width 1280 --height 720 --duration 30 --blur   --out benchmarks/rvm_512_ds025_720p_blur.json
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 --blur \
+  --out benchmarks/rvm_512_ds025_720p_blur.json
 
 # Blur OFF
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25   --width 1280 --height 720 --duration 30   --out benchmarks/rvm_512_ds025_720p_no_blur.json
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 \
+  --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
 
 **Known issues**
 - Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
+- Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
 - First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
 
 ## Temporal stability (RVM vs no temporal state)
