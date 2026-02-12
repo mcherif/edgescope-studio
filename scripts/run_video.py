@@ -262,9 +262,11 @@ def main() -> int:
                 f"Recommended backend on this machine (cached): {backend} "
                 f"({reason})"
             )
+            print("Override: --backend msmf|dshow, Reprobe: --reprobe")
         else:
             backend = probe_backend()
             print(f"Recommended backend on this machine: {backend}")
+            print("Override: --backend msmf|dshow, Reprobe: --reprobe")
         pipeline.reset()
 
     cap = open_camera(backend)

@@ -231,6 +231,7 @@ def main() -> int:
 
     write_cache(winner, winner_reason, results)
     print(f"\nWinner: {winner} ({winner_reason})")
+    print("stable = passed health check + warning_count == 0")
     return 0
 
 
