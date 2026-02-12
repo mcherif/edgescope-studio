@@ -161,6 +161,13 @@ def main() -> int:
         input_size=int(args.input_size),
         downsample_ratio=float(args.downsample),
     )
+    if args.device == "cuda" and "CUDAExecutionProvider" not in pipeline.session.get_providers():
+        print(
+            "ERROR: CUDAExecutionProvider not available; refusing to fall back to CPU. "
+            "Install CUDA-enabled onnxruntime or use --device cpu.",
+            file=sys.stderr,
+        )
+        return 3
 
     cache_path = Path(__file__).resolve().parents[1] / "data" / "cache" / "backend_probe.json"
     cache_key = f"{args.camera}:{args.width}x{args.height}:{args.fps}"

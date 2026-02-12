@@ -48,7 +48,20 @@ def jitter_stats(values: List[float]) -> Tuple[float, float]:
     if not values:
         return 0.0, 0.0
     arr = np.asarray(values, dtype=np.float32)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return 0.0, 0.0
     return float(arr.mean()), float(np.percentile(arr, 95))
+
+
+def edge_mask(alpha: np.ndarray, grad_thresh: float = 0.02) -> np.ndarray:
+    band = (alpha >= 0.1) & (alpha <= 0.9)
+    a32 = alpha.astype(np.float32)
+    gx = cv2.Sobel(a32, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(a32, cv2.CV_32F, 0, 1, ksize=3)
+    mag = np.sqrt(gx * gx + gy * gy)
+    grad = mag > float(grad_thresh)
+    return band | grad
 
 
 def run_trial(
@@ -61,6 +74,28 @@ def run_trial(
     if not cap.isOpened():
         raise RuntimeError(f"ERROR: cannot open camera {args.camera}")
 
+    # Camera health check: verify we can read frames and they're not all identical.
+    start = time.perf_counter()
+    got_frame = False
+    last = None
+    same_count = 0
+    while time.perf_counter() - start < 1.0:
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        got_frame = True
+        if last is not None and frame.shape == last.shape and np.array_equal(frame, last):
+            same_count += 1
+            if same_count >= 5:
+                cap.release()
+                raise RuntimeError("Camera appears inactive/off; temporal results invalid.")
+        else:
+            same_count = 0
+        last = frame
+    if not got_frame:
+        cap.release()
+        raise RuntimeError("Camera appears inactive/off; temporal results invalid.")
+
     # Warmup (not counted)
     for _ in range(args.warmup_frames):
         ok, frame = cap.read()
@@ -72,9 +107,11 @@ def run_trial(
 
     pipeline.reset(verbose=False)
 
-    jitters: List[float] = []
+    jitters_all: List[float] = []
+    jitters_edge: List[float] = []
     frames = 0
     prev_alpha: np.ndarray | None = None
+    prev_edge: np.ndarray | None = None
     start = time.perf_counter()
 
     while True:
@@ -92,8 +129,19 @@ def run_trial(
         res = pipeline.process_frame(frame)
 
         if prev_alpha is not None:
-            jit = float(np.mean(np.abs(res.alpha - prev_alpha)))
-            jitters.append(jit)
+            diff = np.abs(res.alpha - prev_alpha)
+            jitters_all.append(float(diff.mean()))
+
+            edge = edge_mask(res.alpha)
+            if prev_edge is None:
+                prev_edge = edge_mask(prev_alpha)
+            mask = edge | prev_edge
+            if np.any(mask):
+                jitters_edge.append(float(diff[mask].mean()))
+            else:
+                jitters_edge.append(float("nan"))
+
+            prev_edge = edge
         prev_alpha = res.alpha
         frames += 1
 
@@ -101,15 +149,18 @@ def run_trial(
 
     elapsed = time.perf_counter() - start
     fps = frames / elapsed if elapsed > 0 else 0.0
-    jitter_mean, jitter_p95 = jitter_stats(jitters)
+    jitter_all_mean, jitter_all_p95 = jitter_stats(jitters_all)
+    jitter_edge_mean, jitter_edge_p95 = jitter_stats(jitters_edge)
 
     return {
         "label": label,
         "frames": frames,
         "elapsed_s": float(elapsed),
         "fps_mean": float(fps),
-        "jitter_mean": jitter_mean,
-        "jitter_p95": jitter_p95,
+        "jitter_all_mean": jitter_all_mean,
+        "jitter_all_p95": jitter_all_p95,
+        "jitter_edge_mean": jitter_edge_mean,
+        "jitter_edge_p95": jitter_edge_p95,
         "reset_each_frame": reset_each_frame,
     }
 
@@ -150,6 +201,13 @@ def main() -> int:
         input_size=int(args.input_size),
         downsample_ratio=float(args.downsample),
     )
+    if args.device == "cuda" and "CUDAExecutionProvider" not in pipeline.session.get_providers():
+        print(
+            "ERROR: CUDAExecutionProvider not available; refusing to fall back to CPU. "
+            "Install CUDA-enabled onnxruntime or use --device cpu.",
+            file=sys.stderr,
+        )
+        return 3
 
     config = {
         "camera": args.camera,
@@ -162,23 +220,33 @@ def main() -> int:
         "downsample_ratio": args.downsample,
         "warmup_frames": args.warmup_frames,
         "duration_s": args.duration,
+        "jitter_edge_band": [0.1, 0.9],
+        "jitter_grad_thresh": 0.02,
     }
 
-    print("Temporal ON (recurrent states enabled)")
-    on = run_trial("temporal_on", args, pipeline, reset_each_frame=False)
-    print(
-        f"  fps={on['fps_mean']:.2f} "
-        f"jitter_mean={on['jitter_mean']:.6f} "
-        f"jitter_p95={on['jitter_p95']:.6f}"
-    )
+    try:
+        print("Temporal ON (recurrent states enabled)")
+        on = run_trial("temporal_on", args, pipeline, reset_each_frame=False)
+        print(
+            f"  fps={on['fps_mean']:.2f} "
+            f"jitter_all_mean={on['jitter_all_mean']:.6f} "
+            f"jitter_all_p95={on['jitter_all_p95']:.6f} "
+            f"jitter_edge_mean={on['jitter_edge_mean']:.6f} "
+            f"jitter_edge_p95={on['jitter_edge_p95']:.6f}"
+        )
 
-    print("Temporal OFF (reset states every frame)")
-    off = run_trial("temporal_off", args, pipeline, reset_each_frame=True)
-    print(
-        f"  fps={off['fps_mean']:.2f} "
-        f"jitter_mean={off['jitter_mean']:.6f} "
-        f"jitter_p95={off['jitter_p95']:.6f}"
-    )
+        print("Temporal OFF (reset states every frame)")
+        off = run_trial("temporal_off", args, pipeline, reset_each_frame=True)
+        print(
+            f"  fps={off['fps_mean']:.2f} "
+            f"jitter_all_mean={off['jitter_all_mean']:.6f} "
+            f"jitter_all_p95={off['jitter_all_p95']:.6f} "
+            f"jitter_edge_mean={off['jitter_edge_mean']:.6f} "
+            f"jitter_edge_p95={off['jitter_edge_p95']:.6f}"
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     Path(args.out_on).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_off).parent.mkdir(parents=True, exist_ok=True)
@@ -191,11 +259,15 @@ def main() -> int:
     )
 
     # Improvement (lower is better)
-    if off["jitter_mean"] > 0:
-        improvement = (off["jitter_mean"] - on["jitter_mean"]) / off["jitter_mean"] * 100.0
+    if off["jitter_edge_mean"] > 0:
+        improvement = (
+            (off["jitter_edge_mean"] - on["jitter_edge_mean"])
+            / off["jitter_edge_mean"]
+            * 100.0
+        )
     else:
         improvement = 0.0
-    print(f"Improvement (mean jitter): {improvement:.2f}%")
+    print(f"Improvement (edge jitter mean): {improvement:.2f}%")
 
     return 0
 

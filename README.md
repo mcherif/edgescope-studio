@@ -149,13 +149,15 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 ## Temporal stability (RVM vs no temporal state)
 
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
+Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
 
-| Mode        | Jitter mean       | Jitter p95        | FPS (mean)        |
-|-------------|-------------------|-------------------|-------------------|
-| Temporal ON | 0.010258673690259457 | 0.04989748075604435 | 29.761599203797914 |
-| Temporal OFF | 0.005262639373540878 | 0.014599737245589495 | 29.68804086239695  |
+| Mode                    | FPS   | Jitter mean (all) | Jitter p95 (all) | Jitter mean (edge) | Jitter p95 (edge) |
+|-------------------------|-------|-------------------|------------------|--------------------|-------------------|
+| Reset states (OFF)      | 28.03 | 0.00449           | 0.01058          | 0.03587            | 0.08000           |
+| Recurrent states (ON)   | 25.73 | 0.00201           | 0.00639          | 0.02345            | 0.07130           |
+| Improvement             | -8.2% | -55.2%            | -39.6%           | -34.6%             | -10.9%            |
 
-Improvement (mean jitter): -94.93% (negative means temporal ON was worse in this run).
+Edge jitter tracks boundary flicker (most visible artifact); ON reduces edge jitter mean by ~35%.
 
 ### How to reproduce (temporal jitter)
 ```bash

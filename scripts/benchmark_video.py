@@ -127,6 +127,14 @@ def main() -> int:
         input_size=int(args.input_size),
         downsample_ratio=float(args.downsample),
     )
+    if args.device == "cuda" and "CUDAExecutionProvider" not in pipeline.session.get_providers():
+        cap.release()
+        print(
+            "ERROR: CUDAExecutionProvider not available; refusing to fall back to CPU. "
+            "Install CUDA-enabled onnxruntime or use --device cpu.",
+            file=sys.stderr,
+        )
+        return 3
 
     compositor: Optional[BackgroundBlur] = None
     if args.blur:
