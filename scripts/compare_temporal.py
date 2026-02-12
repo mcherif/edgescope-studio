@@ -109,6 +109,7 @@ def run_trial(
 
     jitters_all: List[float] = []
     jitters_edge: List[float] = []
+    edge_fractions: List[float] = []
     frames = 0
     prev_alpha: np.ndarray | None = None
     prev_edge: np.ndarray | None = None
@@ -143,6 +144,8 @@ def run_trial(
 
             prev_edge = edge
         prev_alpha = res.alpha
+        edge_band = (res.alpha >= 0.1) & (res.alpha <= 0.9)
+        edge_fractions.append(float(edge_band.mean()))
         frames += 1
 
     cap.release()
@@ -151,6 +154,7 @@ def run_trial(
     fps = frames / elapsed if elapsed > 0 else 0.0
     jitter_all_mean, jitter_all_p95 = jitter_stats(jitters_all)
     jitter_edge_mean, jitter_edge_p95 = jitter_stats(jitters_edge)
+    edge_frac_mean, edge_frac_p95 = jitter_stats(edge_fractions)
 
     return {
         "label": label,
@@ -161,6 +165,8 @@ def run_trial(
         "jitter_all_p95": jitter_all_p95,
         "jitter_edge_mean": jitter_edge_mean,
         "jitter_edge_p95": jitter_edge_p95,
+        "edge_fraction_mean": edge_frac_mean,
+        "edge_fraction_p95": edge_frac_p95,
         "reset_each_frame": reset_each_frame,
     }
 
@@ -232,7 +238,9 @@ def main() -> int:
             f"jitter_all_mean={on['jitter_all_mean']:.6f} "
             f"jitter_all_p95={on['jitter_all_p95']:.6f} "
             f"jitter_edge_mean={on['jitter_edge_mean']:.6f} "
-            f"jitter_edge_p95={on['jitter_edge_p95']:.6f}"
+            f"jitter_edge_p95={on['jitter_edge_p95']:.6f} "
+            f"edge_fraction_mean={on['edge_fraction_mean']*100:.2f}% "
+            f"edge_fraction_p95={on['edge_fraction_p95']*100:.2f}%"
         )
 
         print("Temporal OFF (reset states every frame)")
@@ -242,7 +250,9 @@ def main() -> int:
             f"jitter_all_mean={off['jitter_all_mean']:.6f} "
             f"jitter_all_p95={off['jitter_all_p95']:.6f} "
             f"jitter_edge_mean={off['jitter_edge_mean']:.6f} "
-            f"jitter_edge_p95={off['jitter_edge_p95']:.6f}"
+            f"jitter_edge_p95={off['jitter_edge_p95']:.6f} "
+            f"edge_fraction_mean={off['edge_fraction_mean']*100:.2f}% "
+            f"edge_fraction_p95={off['edge_fraction_p95']*100:.2f}%"
         )
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)

@@ -2,26 +2,26 @@
 
 It has two modes:
 
-- **Image mode (RTMDet + SAM)**: general object detection + promptable segmentation for still images.
-- **Video mode (RVM)**: real-time portrait matting + background blur with **temporal stability** (recurrent states).
+- **Image mode ([RTMDet](#acronym-rtmdet) + [SAM](#acronym-sam))**: general object detection + promptable segmentation for still images.
+- **Video mode ([RVM](#acronym-rvm))**: real-time portrait matting + background blur with **temporal stability** (recurrent states).
 
 The core idea:
 
-- Image mode: load your images -> run a permissive detector (RTMDet Tiny on COCO) + SAM -> inspect boxes & masks -> iterate on thresholds, models, and logic without touching the cloud.
-- Video mode: RVM recurrent states -> alpha matte -> blur compositor.
+- Image mode: load your images -> run a permissive detector ([RTMDet](#acronym-rtmdet) Tiny on COCO) + [SAM](#acronym-sam) -> inspect boxes & masks -> iterate on thresholds, models, and logic without touching the cloud.
+- Video mode: [RVM](#acronym-rvm) recurrent states -> alpha matte -> blur compositor.
 
 Video mode uses RVM to produce a temporally-stable alpha matte per frame; no detector/SAM in the loop.
 
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
-For real-time portrait effects we use **Robust Video Matting (RVM)** (video-native, recurrent temporal states).
-For general object segmentation in still images we use **detect -> segment (RTMDet + SAM)**.
+For real-time portrait effects we use **Robust Video Matting ([RVM](#acronym-rvm))** (video-native, recurrent temporal states).
+For general object segmentation in still images we use **detect -> segment ([RTMDet](#acronym-rtmdet) + [SAM](#acronym-sam))**.
 
-RVM is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model "remember" motion and fine hair detail so the mask stays coherent over time.
+[RVM](#acronym-rvm) is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model "remember" motion and fine hair detail so the mask stays coherent over time.
 
 ![EdgeScope Studio UI](docs/assets/ui-snapshot-image-based-analysis.png)
 
-## Quick start: Video mode (RVM background blur)
+## Quick start: Video mode ([RVM](#acronym-rvm) background blur)
 
 **Requirements:** Windows + NVIDIA GPU recommended (ONNX Runtime CUDA).  
 **Model:** Robust Video Matting (RVM) MobileNetV3 ONNX (downloaded locally; not committed).
@@ -77,8 +77,8 @@ Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/
 
 ## What's implemented
 
-- Image demo with **RTMDet Tiny (COCO)** for boxes + labels.
-- **Segment Anything (SAM ViT-B)** turns those boxes into masks; toggleable in the UI.
+- Image demo with **[RTMDet](#acronym-rtmdet) Tiny (COCO)** for boxes + labels.
+- **Segment Anything ([SAM](#acronym-sam) ViT-B)** turns those boxes into masks; toggleable in the UI.
 - Class whitelist + aliases in `config/classes.yaml` (single source of truth).
 - Gradio UI (`scripts/run_image_app.py`) with confidence slider and "Show SAM masks".
 
@@ -105,7 +105,7 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show 
 ## Notes
 
 - Detector is COCO-trained; class filtering/aliasing is controlled by `config/classes.yaml`.
-- SAM is class-agnostic; we prompt it with RTMDet boxes so we only segment detected objects (faster than running SAM across the whole image and it carries the detector's class labels).
+- [SAM](#acronym-sam) is class-agnostic; we prompt it with [RTMDet](#acronym-rtmdet) boxes so we only segment detected objects (faster than running [SAM](#acronym-sam) across the whole image and it carries the detector's class labels).
 - Why detection first: without detector boxes you'd have to run SAM's auto-segmentation over the whole image (more masks, higher latency) and then classify each mask with another model to know the class--slower and less reliable than detect -> segment.
 - If the default port is busy, change `server_port` in `scripts/run_image_app.py`.
 - Performance snapshot on RTX 4060 Ti (1024x1536 image): first-run init ~33.4s (detector) + ~3.1s (SAM); per-image after init ~1.5s detector + ~1.1s SAM.
@@ -146,7 +146,7 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 - Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
 - First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
 
-## Temporal stability (RVM vs no temporal state)
+## Temporal stability ([RVM](#acronym-rvm) vs no temporal state)
 
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
 Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
@@ -172,3 +172,11 @@ Note: This metric is scene-dependent; rerun with real motion to see temporal ben
 - Add a simple quality knob for blur (downscale/sigma) and document tradeoffs.
 - Add a temporal-stability comparison mode (reset recurrent states) + jitter metric.
 - Optional: integrate video into a UI (Gradio) once the core pipeline is rock-solid.
+
+## Acronyms
+
+| Acronym | Meaning |
+|---------|---------|
+| <a id="acronym-rtmdet"></a>RTMDet | Real-Time Multi-Object Detection |
+| <a id="acronym-rvm"></a>RVM | Robust Video Matting |
+| <a id="acronym-sam"></a>SAM | Segment Anything Model |

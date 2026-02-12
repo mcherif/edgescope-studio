@@ -21,13 +21,15 @@
   },
   "results": {
     "label": "temporal_off",
-    "frames": 843,
-    "elapsed_s": 30.0710301999934,
-    "fps_mean": 28.033625532396456,
-    "jitter_all_mean": 0.004487043712288141,
-    "jitter_all_p95": 0.010582729615271087,
-    "jitter_edge_mean": 0.03586801141500473,
-    "jitter_edge_p95": 0.08000247180461881,
+    "frames": 774,
+    "elapsed_s": 30.071843500016257,
+    "fps_mean": 25.738362199164197,
+    "jitter_all_mean": 0.005108799319714308,
+    "jitter_all_p95": 0.010172669962048528,
+    "jitter_edge_mean": 0.03989598900079727,
+    "jitter_edge_p95": 0.07766884565353392,
+    "edge_fraction_mean": 0.0801403746008873,
+    "edge_fraction_p95": 0.09848328791558739,
     "reset_each_frame": true
   }
 }
