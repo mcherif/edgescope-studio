@@ -85,15 +85,21 @@ Notes: models are already loaded; numbers exclude one-time init.
 
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
-Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25` (blur ON).
+Windows capture backend varies by camera/driver/virtual cam. EdgeScope can probe MSMF vs DShow and cache the best backend on your system. If results are within 5%, we choose the backend with lower p95 latency.
+If a backend is unstable (warnings or failed health checks), we prefer the stable backend even if raw FPS is similar.
 
-| Backend | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
-|---------|-------------------|---------------------|---------------------|--------------------|
-| dshow   | 21.172601490380913 | 52.30314025878906   | 30.45789985656738   | 8.97429370880127   |
-| msmf    | 18.17497445353196  | 98.11545372009277   | 23.668424606323242  | 9.486242294311523  |
+Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25`.
+Backend choice is machine/driver/camera dependent; try both and pick the best on your system.
+For this machine, MSMF was faster overall and had better p95 in the last batch.
+
+| Backend | Blur | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
+|---------|------|-------------------|---------------------|---------------------|--------------------|
+| dshow   | ON   | 21.15380108548842 | 54.0599250793457    | 27.775175094604492  | 9.388077735900879  |
+| dshow   | OFF  | 21.32177792750456 | 52.229400634765625  | 27.04789924621582   | 0.0                |
+| msmf    | ON   | 26.248317831749215 | 48.659420013427734  | 24.684019470214842  | 9.228377342224121  |
+| msmf    | OFF  | 29.911379171343338 | 46.91483840942382   | 24.032090950012204  | 0.0                |
 
 Notes:
-- RVM inference mean: `24.117700576782227ms` (dshow), `17.27578353881836ms` (msmf).
 - Compositing is optimized using **uint8 OpenCV ops**; precision impact is small (see `scripts/compare_compositing_precision.py`).
 
 ## Video roadmap (optional)
