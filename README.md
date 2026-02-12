@@ -83,17 +83,17 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle “Sho
 
 Notes: models are already loaded; numbers exclude one-time init.
 
-## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
+## Video benchmarks (RTX 4060 Ti, Windows, 1280×720 capture)
 
-Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25` (blur ON).
+Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25`.
 
-| Backend | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
-|---------|-------------------|---------------------|---------------------|--------------------|
-| dshow   | 21.172601490380913 | 52.30314025878906   | 30.45789985656738   | 8.97429370880127   |
-| msmf    | 18.17497445353196  | 98.11545372009277   | 23.668424606323242  | 9.486242294311523  |
+| Mode     | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
+|----------|-------------------|---------------------|---------------------|--------------------|
+| Blur ON  | 25.74              | 51.42               | 28.77               | 9.15               |
+| Blur OFF | 29.84              | 46.55               | 23.95               | 0.00               |
 
 Notes:
-- RVM inference mean: `24.117700576782227ms` (dshow), `17.27578353881836ms` (msmf).
+- **RVM inference is ~19–20ms mean** at 512 input; the remaining budget is capture + compositing.
 - Compositing is optimized using **uint8 OpenCV ops**; precision impact is small (see `scripts/compare_compositing_precision.py`).
 
 ## Video roadmap (optional)
