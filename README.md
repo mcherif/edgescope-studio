@@ -38,10 +38,10 @@ python scripts/run_video.py --device cpu --input-size 512 --downsample 0.25
 Controls: `q` quit, `b` toggle blur/debug, `r` reset temporal state
 
 ### 3) Windows capture backend (auto-select + caching)
-Default backend is `dshow`. Auto mode (`--backend auto`) will:
+Default backend is `auto` (probe + cache). Auto mode will:
 - run a short blur-off probe (`msmf` vs `dshow`)
 - select the best stable backend and cache the decision
-- define stable as: passed health check + `warning_count == 0`
+- define stable as: passed health check (frames flowing / not stuck) + `warning_count == 0`
 
 Override / reprobe:
 ```bash
@@ -112,18 +112,17 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show 
 | Resolution        | Detections | Masks | Detector (s) | SAM (s) | Total (s) |
 |-------------------|------------|-------|--------------|---------|-----------|
 | 1024x1536 (orig)  | 39         | 39    | 0.746        | 0.764   | 1.511     |
-| 640x426 (downscale)| 38        | 38    | 0.125        | 0.594   | 0.718     |
+| 640x426 (downscale) | 38        | 38    | 0.125        | 0.594   | 0.718     |
 
 Notes: models are already loaded; numbers exclude one-time init.
 
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
-Windows capture backend varies by camera/driver/virtual cam. EdgeScope can probe MSMF vs DShow and cache the best backend on your system. If results are within 5%, we choose the backend with lower p95 latency.
+Windows capture backend varies by camera/driver/virtual-cam. EdgeScope can probe MSMF vs DShow and cache the best backend on your system. If results are within 5%, we choose the backend with lower p95 latency.
 If a backend is unstable (warnings or failed health checks), we prefer the stable backend even if raw FPS is similar.
 
 Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25`.
-Backend choice is machine/driver/camera dependent; try both and pick the best on your system.
-For this machine, MSMF was faster overall and had better p95 in the last batch.
+Backend performance varies by camera/driver/virtual-cam; use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
 
 | Backend | Blur | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
 |---------|------|-------------------|---------------------|---------------------|--------------------|
