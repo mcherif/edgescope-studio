@@ -7,14 +7,14 @@ It has two modes:
 
 The core idea:
 
-> Load your images → run a permissive detector (RTMDet Tiny on COCO) + SAM → inspect boxes & masks → iterate on thresholds, models, and logic without touching the cloud.
+> Load your images -> run a permissive detector (RTMDet Tiny on COCO) + SAM -> inspect boxes & masks -> iterate on thresholds, models, and logic without touching the cloud.
 
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
 For real-time portrait effects we use **Robust Video Matting (RVM)** (video-native, recurrent temporal states).
-For general object segmentation in still images we use **detect → segment (RTMDet + SAM)**.
+For general object segmentation in still images we use **detect -> segment (RTMDet + SAM)**.
 
-RVM is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model “remember” motion and fine hair detail so the mask stays coherent over time.
+RVM is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model "remember" motion and fine hair detail so the mask stays coherent over time.
 
 ![EdgeScope Studio UI](docs/assets/ui-snapshot-image-based-analysis.png)
 
@@ -38,7 +38,7 @@ python scripts/run_video.py --device cpu --input-size 512 --downsample 0.25
 Controls: `q` quit, `b` toggle blur/debug, `r` reset temporal state
 
 ### 3) Windows capture backend (auto-select + caching)
-Default backend is `msmf`. Auto mode (`--backend auto`) will:
+Default backend is `dshow`. Auto mode (`--backend auto`) will:
 - run a short blur-off probe (`msmf` vs `dshow`)
 - select the best stable backend and cache the decision
 - define stable as: passed health check + `warning_count == 0`
@@ -68,17 +68,16 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
   --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
 
-Note: Windows capture performance can vary by camera/driver/virtual-cam; run `probe_backends.py` to pick the best backend on your system.
-Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends.py` to pick the best backend on your system.
+Note: Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends.py` to pick the best backend on your system.
 
 Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
-## What’s implemented
+## What's implemented
 
 - Image demo with **RTMDet Tiny (COCO)** for boxes + labels.
 - **Segment Anything (SAM ViT-B)** turns those boxes into masks; toggleable in the UI.
 - Class whitelist + aliases in `config/classes.yaml` (single source of truth).
-- Gradio UI (`scripts/run_image_app.py`) with confidence slider and “Show SAM masks”.
+- Gradio UI (`scripts/run_image_app.py`) with confidence slider and "Show SAM masks".
 
 ## Setup
 
@@ -98,22 +97,22 @@ pip install -r requirements.txt
 ```bash
 python scripts/run_image_app.py
 ```
-Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle “Show SAM masks”.
+Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show SAM masks".
 
 ## Notes
 
 - Detector is COCO-trained; class filtering/aliasing is controlled by `config/classes.yaml`.
-- SAM is class-agnostic; we prompt it with RTMDet boxes so we only segment detected objects (faster than running SAM across the whole image and it carries the detector’s class labels).
-- Why detection first: without detector boxes you’d have to run SAM’s auto-segmentation over the whole image (more masks, higher latency) and then classify each mask with another model to know the class—slower and less reliable than detect → segment.
+- SAM is class-agnostic; we prompt it with RTMDet boxes so we only segment detected objects (faster than running SAM across the whole image and it carries the detector's class labels).
+- Why detection first: without detector boxes you'd have to run SAM's auto-segmentation over the whole image (more masks, higher latency) and then classify each mask with another model to know the class--slower and less reliable than detect -> segment.
 - If the default port is busy, change `server_port` in `scripts/run_image_app.py`.
-- Performance snapshot on RTX 4060 Ti (1024×1536 image): first-run init ~33.4s (detector) + ~3.1s (SAM); per-image after init ~1.5s detector + ~1.1s SAM.
+- Performance snapshot on RTX 4060 Ti (1024x1536 image): first-run init ~33.4s (detector) + ~3.1s (SAM); per-image after init ~1.5s detector + ~1.1s SAM.
 
 ## Benchmark snapshots (steady state, RTX 4060 Ti)
 
 | Resolution        | Detections | Masks | Detector (s) | SAM (s) | Total (s) |
 |-------------------|------------|-------|--------------|---------|-----------|
-| 1024×1536 (orig)  | 39         | 39    | 0.746        | 0.764   | 1.511     |
-| 640×426 (downscale)| 38        | 38    | 0.125        | 0.594   | 0.718     |
+| 1024x1536 (orig)  | 39         | 39    | 0.746        | 0.764   | 1.511     |
+| 640x426 (downscale)| 38        | 38    | 0.125        | 0.594   | 0.718     |
 
 Notes: models are already loaded; numbers exclude one-time init.
 

@@ -52,7 +52,7 @@ class RVMPipeline:
             raise RuntimeError(f"Model missing required inputs: {missing}")
 
         print(
-            f"✓ RVMPipeline ready: provider={self.session.get_providers()[0]}, input={self.input_size}x{self.input_size}")
+            f"OK: RVMPipeline ready: provider={self.session.get_providers()[0]}, input={self.input_size}x{self.input_size}")
         # Burn-in to avoid first-frame latency spike skewing metrics
         dummy = np.zeros(
             (1, 3, self.input_size, self.input_size), dtype=np.float32)
