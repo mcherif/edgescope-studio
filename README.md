@@ -20,22 +20,56 @@ RVM is a video matting model that keeps **recurrent state** across frames, which
 
 ## Quick start: Video mode (RVM background blur)
 
-Requirements: Windows + NVIDIA GPU recommended (ONNX Runtime CUDA).
+**Requirements:** Windows + NVIDIA GPU recommended (ONNX Runtime CUDA).  
+**Model:** Robust Video Matting (RVM) MobileNetV3 ONNX (downloaded locally; not committed).
 
+### 1) Setup (download/verify model, write IO metadata)
 ```bash
-# 1) (Optional) download/verify model + write models/rvm_io.json
 python scripts/setup_video.py
-
-# 2) Run webcam demo (OpenCV window)
-python scripts/run_video.py --device cuda --input-size 512 --downsample 0.25
 ```
 
-Benchmark (headless):
-
+### 2) Run webcam demo (OpenCV window)
 ```bash
-python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --blur --out benchmarks/rvm_512_ds025_720p_blur.json
-python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --out benchmarks/rvm_512_ds025_720p_no_blur.json
+python scripts/run_video.py --device cuda --input-size 512 --downsample 0.25
+# CPU fallback (slower)
+python scripts/run_video.py --device cpu --input-size 512 --downsample 0.25
 ```
+
+Controls: `q` quit, `b` toggle blur/debug, `r` reset temporal state
+
+### 3) Windows capture backend (auto-select + caching)
+Default backend is `msmf`. Auto mode (`--backend auto`) will:
+- run a short blur-off probe (`msmf` vs `dshow`)
+- select the best stable backend and cache the decision
+- define stable as: passed health check + `warning_count == 0`
+
+Override / reprobe:
+```bash
+python scripts/run_video.py --backend dshow ...
+python scripts/run_video.py --backend msmf ...
+python scripts/run_video.py --backend auto --reprobe ...
+```
+
+Probe directly:
+```bash
+python scripts/probe_backends.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 20
+```
+
+### 4) Benchmark (headless)
+```bash
+# Blur ON (pin backend for reproducibility)
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 --blur \
+  --out benchmarks/rvm_512_ds025_720p_blur.json
+
+# Blur OFF
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 \
+  --out benchmarks/rvm_512_ds025_720p_no_blur.json
+```
+
+Note: Windows capture performance can vary by camera/driver/virtual-cam; run `probe_backends.py` to pick the best backend on your system.
+Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends.py` to pick the best backend on your system.
 
 Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
