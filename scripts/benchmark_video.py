@@ -84,7 +84,7 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--fps", type=int, default=30)
-    ap.add_argument("--backend", type=str, default="msmf",
+    ap.add_argument("--backend", type=str, default="dshow",
                     choices=["any", "dshow", "msmf"])
 
     ap.add_argument("--model", type=str,
