@@ -138,6 +138,25 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 - Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
 - First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
 
+## Temporal stability (RVM vs no temporal state)
+
+Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
+
+| Mode        | Jitter mean       | Jitter p95        | FPS (mean)        |
+|-------------|-------------------|-------------------|-------------------|
+| Temporal ON | 0.010258673690259457 | 0.04989748075604435 | 29.761599203797914 |
+| Temporal OFF | 0.005262639373540878 | 0.014599737245589495 | 29.68804086239695  |
+
+Improvement (mean jitter): -94.93% (negative means temporal ON was worse in this run).
+
+### How to reproduce (temporal jitter)
+```bash
+python scripts/compare_temporal.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30
+```
+
+Note: This metric is scene-dependent; rerun with real motion to see temporal benefits.
+
 ## Video roadmap (optional)
 
 - Add a simple quality knob for blur (downscale/sigma) and document tradeoffs.

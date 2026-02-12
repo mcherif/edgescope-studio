@@ -1,0 +1,26 @@
+{
+  "config": {
+    "camera": 0,
+    "backend": "dshow",
+    "capture_resolution": [
+      1280,
+      720
+    ],
+    "fps": 30,
+    "device": "cuda",
+    "model": "models/rvm_mobilenetv3_fp32.onnx",
+    "input_size": 512,
+    "downsample_ratio": 0.25,
+    "warmup_frames": 30,
+    "duration_s": 30
+  },
+  "results": {
+    "label": "temporal_off",
+    "frames": 892,
+    "elapsed_s": 30.045768399955705,
+    "fps_mean": 29.68804086239695,
+    "jitter_mean": 0.005262639373540878,
+    "jitter_p95": 0.014599737245589495,
+    "reset_each_frame": true
+  }
+}
