@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.ruff_cache/
 
 # Model weights and large artifacts
 *.pth
