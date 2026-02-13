@@ -107,18 +107,18 @@ def main() -> int:
         "--video",
         type=str,
         default=None,
-        help="Optional video path. If set, uses a single frame repeatedly.",
+        help="Optional video path. If set, uses file input (loops by default).",
     )
     ap.add_argument(
         "--video-frame-index",
         type=int,
         default=0,
-        help="0-based frame index to use when --video is set (default: 0).",
+        help="0-based frame index to start from when --video is set.",
     )
     ap.add_argument(
         "--video-frame-count",
         type=int,
-        default=1,
+        default=0,
         help="Number of consecutive frames to loop when --video is set (0 = full clip).",
     )
     ap.add_argument("--width", type=int, default=1280)

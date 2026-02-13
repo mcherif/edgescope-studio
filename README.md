@@ -77,6 +77,87 @@ Note: Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends
 
 Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
+## Benchmark snapshot (frozen config)
+
+**Primary input:** Pexels clip (file)  
+**Secondary:** webcam (capture variability)  
+**Frozen settings:** `512 / 0.25 / 720p / dshow / blur_scale=0.5 / blur_sigma=8`
+
+| Category | Metric | Result |
+|---|---|---|
+| Performance (optimized) | FPS mean | **39.02** |
+|  | Total latency p95 | **29.96 ms** |
+| Temporal stability (Sobel edge jitter mean) | OFF -> ON | **0.08246 -> 0.06315** (**-23.4%**) |
+| Compositing optimization | comp mean (legacy -> optimized) | **9.51 -> 5.72 ms** |
+|  | FPS (legacy -> optimized) | **32.67 -> 39.02** (**+19.4%**) |
+
+Optimization: keep alpha work in uint8-friendly OpenCV ops and avoid repeated 3-channel alpha expansion / per-frame allocations in the hot path.
+
+- Reduced alpha prep overhead (fewer conversions/expansions; avoid redundant 3-channel alpha work where possible).
+- Reduced blend cost by minimizing per-frame allocations and using uint8-friendly OpenCV ops in the hot path.
+
+Quality impact: negligible (see `scripts/compare_compositing_precision.py`; PSNR ~51 dB on webcam frame).
+
+**Reproduce:**
+```bash
+# Performance (optimized)
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --blur-sigma 8 --comp-mode soft --alpha-path optimized --backend dshow \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json
+
+# Temporal stability (Sobel edge jitter)
+python scripts/compare_temporal.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 --edge-mode grad --edge-grad-thresh 0.02 \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 \
+  --out-on benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json \
+  --out-off benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json
+
+# Compositing legacy vs optimized
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --blur-sigma 8 --comp-mode soft --alpha-path legacy --backend dshow \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
+```
+
+Artifacts: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`,
+`benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
+`benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json`,
+`benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json`.
+
+## Additional benchmarks / notes
+
+### Webcam capture (secondary)
+
+Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
+
+| Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
+|------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
+| ON   | 29.6       | 33.7            | 41.9           | 20.1            | 25.3           | 10.1           | 11.4          |
+| OFF  | 29.9       | 33.4            | 45.8           | 20.5            | 28.0           | 0.0            | 0.0           |
+
+### How to reproduce
+```bash
+# Blur ON (backend pinned for reproducibility)
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 --blur \
+  --out benchmarks/rvm_512_ds025_720p_blur.json
+
+# Blur OFF
+python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
+  --width 1280 --height 720 --duration 30 \
+  --out benchmarks/rvm_512_ds025_720p_no_blur.json
+```
+
+**Known issues**
+- Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
+- Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
+- First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
+- Trimap compositing (hard fg/bg + soft edge band) was tested as an optimization but measured slower due to mask construction overhead (see `benchmarks/rvm_512_ds025_720p_blur_soft_profile.json` vs `benchmarks/rvm_512_ds025_720p_blur_trimap_profile.json`).
+
+
 ## What's implemented
 
 - Image demo with **[RTMDet](#acronym-rtmdet) Tiny (COCO)** for boxes + labels.
@@ -121,92 +202,14 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show 
 
 Notes: models are already loaded; numbers exclude one-time init.
 
-## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
-
-Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
-Config: `dshow`, 1280x720, `--blur-scale 0.5 --blur-sigma 8`, virtual cam ON at capture time.
-
-| Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
-|------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
-| ON   | 29.6       | 33.7            | 41.9           | 20.1            | 25.3           | 10.1           | 11.4          |
-| OFF  | 29.9       | 33.4            | 45.8           | 20.5            | 28.0           | 0.0            | 0.0           |
-
-### How to reproduce
-```bash
-# Blur ON (backend pinned for reproducibility)
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30 --blur \
-  --out benchmarks/rvm_512_ds025_720p_blur.json
-
-# Blur OFF
-python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30 \
-  --out benchmarks/rvm_512_ds025_720p_no_blur.json
-```
-
-**Known issues**
-- Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
-- Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
-- First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
-- Trimap compositing (hard fg/bg + soft edge band) was tested as an optimization but measured slower due to mask construction overhead (see `benchmarks/rvm_512_ds025_720p_blur_soft_profile.json` vs `benchmarks/rvm_512_ds025_720p_blur_trimap_profile.json`).
-
-### Compositing optimization (CPU)
-
-Optimized compositing improved throughput by +19.4% on a 10s 720p clip (32.67 → 39.02 FPS) by cutting compositing cost (9.51 → 5.72 ms).
-Optimization: keep alpha work in uint8-friendly OpenCV ops and avoid repeated 3-channel alpha expansion / per-frame allocations in the hot path.
-
-| Metric | Legacy | Optimized | Delta |
-|---|---|---|---|
-| FPS (mean) | 32.67 | 39.02 | +6.35 (+19.4%) |
-| Compositing mean (ms) | 9.51 | 5.72 | -3.80 |
-| Mask/alpha prep mean (ms) | 3.01 | 0.60 | -2.41 |
-| Blend mean (ms) | 2.87 | 1.59 | -1.28 |
-
-- Reduced alpha prep overhead (fewer conversions/expansions; avoid redundant 3-channel alpha work where possible).
-- Reduced blend cost by minimizing per-frame allocations and using uint8-friendly OpenCV ops in the hot path.
-
-Quality impact: negligible (see `scripts/compare_compositing_precision.py`; PSNR ~51 dB on webcam frame).
-
-Repro (full clip loop benchmark):
-```bash
-# Legacy
-python scripts/benchmark_video.py --device cuda \
-  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
-  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
-  --blur --blur-scale 0.5 --comp-mode soft --alpha-path legacy \
-  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
-
-# Optimized
-python scripts/benchmark_video.py --device cuda \
-  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
-  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
-  --blur --blur-scale 0.5 --comp-mode soft --alpha-path optimized \
-  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json
-```
-
-Artifacts: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
-`benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`.
-
 ## Temporal stability ([RVM](#acronym-rvm) vs no temporal state)
-
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
-Jitter measures frame-to-frame matte instability: mean absolute change in alpha (α) between consecutive frames.
+Jitter measures frame-to-frame matte instability: mean absolute change in alpha between consecutive frames.
 Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
 Attribution: Pexels video "A woman talking in front of the computer while drinking" (ID 6517471). Downloaded locally for benchmarking; not redistributed.
 Primary edge definition: Sobel gradient magnitude (threshold 0.02). Auxiliary: alpha band 0.1-0.9.
-We use Sobel(α) magnitude > 0.02 as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
-
-| Mode                  | FPS   | Jitter mean (all) | Jitter p95 (all) | Jitter mean (edge) | Jitter p95 (edge) | Edge fraction mean | Edge fraction p95 |
-|-----------------------|-------|-------------------|------------------|--------------------|-------------------|--------------------|-------------------|
-| Reset states (OFF)    | 21.15 | 0.00796           | 0.01850          | 0.08246            | 0.16531           | 8.04%              | 10.43%            |
-| Recurrent states (ON) | 23.16 | 0.00466           | 0.01061          | 0.06315            | 0.12750           | 6.19%              | 8.18%             |
-
-Temporal ON reduced gradient-defined edge jitter by ~23% (0.08246 -> 0.06315) and reduced edge-pixel fraction from 8.04% -> 6.19%, indicating a cleaner, more decisive boundary.
-
- - Normalized (jitter / edge-pixel fraction): 1.026 -> 1.020 (slight improvement; no evidence of concentrated jitter).
-
-Auxiliary (alpha-band edge): edge jitter mean 0.07998 -> 0.06152, edge fraction mean 4.73% -> 3.29%.
-Note: alpha-band edge sets can shrink/expand with matte softness, which can affect normalized jitter.
+We use Sobel(alpha) magnitude > 0.02 as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
+Headline numbers are in the Benchmark snapshot (frozen config) above.
 
 ### How to reproduce (temporal jitter)
 ```bash
@@ -231,4 +234,4 @@ Note: This metric is scene-dependent; rerun with real motion to see temporal ben
 |---------|---------|
 | <a id="acronym-rtmdet"></a>RTMDet | Real-Time Multi-Object Detection |
 | <a id="acronym-rvm"></a>RVM | Robust Video Matting |
-| <a id="acronym-sam"></a>SAM | Segment Anything Model |
+| <a id="acronym-sam"></a>SAM | [Segment Anything Model](https://github.com/facebookresearch/segment-anything) |
