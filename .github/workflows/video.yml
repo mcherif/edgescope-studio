@@ -25,7 +25,7 @@ jobs:
           pip install ruff pytest numpy opencv-python-headless==4.11.0.86
 
       - name: Ruff
-        run: ruff check edgescope/video/metrics.py tests/test_video/test_units.py
+        run: ruff check .
 
       - name: Pytest (unit only)
         run: pytest tests/test_video/test_units.py
