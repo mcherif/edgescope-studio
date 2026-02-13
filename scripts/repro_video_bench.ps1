@@ -10,6 +10,8 @@ param(
   [double]$BlurSigma = 8.0,
   [string]$VideoUrl = "https://www.pexels.com/download/video/6517471/",
   [string]$ScriptUrl = "https://raw.githubusercontent.com/mcherif/edgescope-studio/main/scripts/benchmark_video.py",
+  [string]$RepoZipUrl = "https://github.com/mcherif/edgescope-studio/archive/refs/heads/main.zip",
+  [string]$RepoCacheDir = "$env:TEMP\\edgescope-studio-main",
   [switch]$UseLocalScript,
   [switch]$Legacy
 )
@@ -17,14 +19,42 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$root = Split-Path -Parent $PSScriptRoot
-Set-Location $root
+function Find-RepoRoot([string]$start) {
+  $current = $start
+  while ($current -and (Test-Path $current)) {
+    if (Test-Path (Join-Path $current "edgescope")) { return $current }
+    $parent = Split-Path -Parent $current
+    if ($parent -eq $current) { break }
+    $current = $parent
+  }
+  return $null
+}
+
+function Ensure-Repo([string]$zipUrl, [string]$cacheDir) {
+  if (-not (Test-Path $cacheDir)) {
+    Write-Host "Downloading repo to: $cacheDir"
+    $zipPath = "$cacheDir.zip"
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+    Expand-Archive -Path $zipPath -DestinationPath (Split-Path -Parent $cacheDir) -Force
+    Remove-Item $zipPath -Force
+  }
+  return $cacheDir
+}
+
+$repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
+if (-not $repoRoot) {
+  $repoRoot = Ensure-Repo $RepoZipUrl $RepoCacheDir
+}
+Set-Location $repoRoot
 
 Write-Host "Streaming benchmark clip from: $VideoUrl"
 
-$scriptPath = Join-Path $PSScriptRoot "benchmark_video.remote.py"
+$scriptDir = Join-Path $repoRoot "scripts"
+if (-not (Test-Path $scriptDir)) { New-Item -ItemType Directory -Path $scriptDir | Out-Null }
+
+$scriptPath = Join-Path $scriptDir "benchmark_video.remote.py"
 if ($UseLocalScript) {
-  $scriptPath = Join-Path $PSScriptRoot "benchmark_video.py"
+  $scriptPath = Join-Path $scriptDir "benchmark_video.py"
 } else {
   Write-Host "Fetching benchmark script from: $ScriptUrl"
   Invoke-WebRequest -Uri $ScriptUrl -OutFile $scriptPath
@@ -42,5 +72,9 @@ python $scriptPath --device $Device --backend $Backend `
   --input-size $InputSize --downsample $Downsample --width $Width --height $Height --duration $Duration `
   --blur --blur-scale $BlurScale --blur-sigma $BlurSigma --comp-mode soft --alpha-path $alphaPath `
   --out $outName
+
+if ($LASTEXITCODE -ne 0) {
+  throw "Benchmark failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Done. Wrote: $outName"
