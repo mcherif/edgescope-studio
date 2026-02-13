@@ -19,12 +19,14 @@ def test_rvm_pipeline_cpu_smoke() -> None:
 
     from edgescope.video.pipeline import RVMPipeline
 
+    # CPU-only path should run locally even without CUDA.
     pipeline = RVMPipeline(
         model_path=str(MODEL_PATH),
         device="cpu",
         input_size=512,
         downsample_ratio=0.25,
     )
+    # Keep frame small (240p) so CPU inference is quick.
     frame = (np.random.rand(240, 320, 3) * 255).astype(np.uint8)
     res = pipeline.process_frame(frame)
     assert res.alpha.shape == (240, 320)
