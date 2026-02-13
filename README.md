@@ -1,3 +1,5 @@
+[![Video CI](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml/badge.svg?branch=main)](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml)
+
 **EdgeScope Studio** is a **local-first** computer vision lab for prototyping **image and video** pipelines on your own machine (offline).
 
 It has two modes:
