@@ -79,6 +79,10 @@ Note: Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends
 
 Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
+Pipeline overview: Capture -> Preprocess -> ORT RVM -> Alpha Matte -> Compositing -> Output.
+
+![EdgeScope Studio Video Pipeline](docs/arch_diagram.png)
+
 ## Results (frozen config)
 
 **Primary input:** Pexels clip (file input; webcam is secondary due to capture variability)  
