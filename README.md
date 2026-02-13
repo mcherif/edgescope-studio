@@ -2,13 +2,8 @@
 
 It has two modes:
 
-<<<<<<< feat/temporal-stability
 - **Image mode ([RTMDet](#acronym-rtmdet) + [SAM](#acronym-sam))**: general object detection + promptable segmentation for still images.
 - **Video mode ([RVM](#acronym-rvm))**: real-time portrait matting + background blur with **temporal stability** (recurrent states).
-=======
-- **Image mode (RTMDet + SAM)**: general object detection + promptable segmentation for still images.
-- **Video mode (RVM)**: real-time portrait matting + background blur with **temporal stability** (recurrent states).
->>>>>>> main
 
 The core idea:
 
@@ -19,7 +14,6 @@ Video mode uses RVM to produce a temporally-stable alpha matte per frame; no det
 
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
-<<<<<<< feat/temporal-stability
 For real-time portrait effects we use **Robust Video Matting ([RVM](#acronym-rvm))** (video-native, recurrent temporal states).
 For general object segmentation in still images we use **detect -> segment ([RTMDet](#acronym-rtmdet) + [SAM](#acronym-sam))**.
 
@@ -76,37 +70,6 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
   --width 1280 --height 720 --duration 30 \
   --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
-=======
-For real-time portrait effects we use **Robust Video Matting (RVM)** (video-native, recurrent temporal states).
-For general object segmentation in still images we use **detect → segment (RTMDet + SAM)**.
-
-RVM is a video matting model that keeps **recurrent state** across frames, which stabilizes edges and reduces flicker compared to per-frame-only inference. Those temporal states let the model “remember” motion and fine hair detail so the mask stays coherent over time.
-
-![EdgeScope Studio UI](docs/assets/ui-snapshot-image-based-analysis.png)
-
-## Quick start: Video mode (RVM background blur)
-
-Requirements: Windows + NVIDIA GPU recommended (ONNX Runtime CUDA).
-
-```bash
-# 1) (Optional) download/verify model + write models/rvm_io.json
-python scripts/setup_video.py
-
-# 2) Run webcam demo (OpenCV window)
-python scripts/run_video.py --device cuda --input-size 512 --downsample 0.25
-```
-
-Benchmark (headless):
-
-```bash
-python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --blur --out benchmarks/rvm_512_ds025_720p_blur.json
-python scripts/benchmark_video.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 --out benchmarks/rvm_512_ds025_720p_no_blur.json
-```
-
-Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
-
-## What’s implemented
->>>>>>> main
 
 Note: Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends.py` to pick the best backend on your system.
 
@@ -156,7 +119,6 @@ Open `http://127.0.0.1:7860`, upload an image, set confidence, and toggle "Show 
 
 Notes: models are already loaded; numbers exclude one-time init.
 
-<<<<<<< feat/temporal-stability
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
 Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
@@ -226,25 +188,5 @@ Note: This metric is scene-dependent; rerun with real motion to see temporal ben
 | Acronym | Meaning |
 |---------|---------|
 | <a id="acronym-rtmdet"></a>RTMDet | Real-Time Multi-Object Detection |
-| <a id="acronym-rvm"></a>RVM | Robust Video Matting |
+| <a id="acronym-rvm"></a>RVM | Robust Video Matting   |
 | <a id="acronym-sam"></a>SAM | Segment Anything Model |
-=======
-## Video benchmarks (RTX 4060 Ti, Windows, 1280×720 capture)
-
-Collected with `scripts/benchmark_video.py`, 30s duration, `--input-size 512 --downsample 0.25`.
-
-| Mode     | FPS (mean)        | Total p95 (ms)      | Infer p95 (ms)      | Comp mean (ms)     |
-|----------|-------------------|---------------------|---------------------|--------------------|
-| Blur ON  | 25.74              | 51.42               | 28.77               | 9.15               |
-| Blur OFF | 29.84              | 46.55               | 23.95               | 0.00               |
-
-Notes:
-- **RVM inference is ~19–20ms mean** at 512 input; the remaining budget is capture + compositing.
-- Compositing is optimized using **uint8 OpenCV ops**; precision impact is small (see `scripts/compare_compositing_precision.py`).
-
-## Video roadmap (optional)
-
-- Add a simple quality knob for blur (downscale/sigma) and document tradeoffs.
-- Add a temporal-stability comparison mode (reset recurrent states) + jitter metric.
-- Optional: integrate video into a UI (Gradio) once the core pipeline is rock-solid.
->>>>>>> main
