@@ -60,7 +60,7 @@ Probe directly:
 python scripts/probe_backends.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 20
 ```
 
-### 4) Benchmark (headless)
+Benchmark (headless):
 ```bash
 # Blur ON (pin backend for reproducibility)
 python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
@@ -124,6 +124,7 @@ Notes: models are already loaded; numbers exclude one-time init.
 ## Video benchmarks (RTX 4060 Ti, Windows, 1280x720 capture)
 
 Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
+Config: `dshow`, 1280x720, `--blur-scale 0.5 --blur-sigma 8`, virtual cam ON at capture time.
 
 | Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
 |------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
@@ -147,12 +148,51 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 - Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
 - Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
 - First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
+- Trimap compositing (hard fg/bg + soft edge band) was tested as an optimization but measured slower due to mask construction overhead (see `benchmarks/rvm_512_ds025_720p_blur_soft_profile.json` vs `benchmarks/rvm_512_ds025_720p_blur_trimap_profile.json`).
+
+### Compositing optimization (CPU)
+
+Optimized compositing improved throughput by +19.4% on a 10s 720p clip (32.67 → 39.02 FPS) by cutting compositing cost (9.51 → 5.72 ms).
+Optimization: keep alpha work in uint8-friendly OpenCV ops and avoid repeated 3-channel alpha expansion / per-frame allocations in the hot path.
+
+| Metric | Legacy | Optimized | Delta |
+|---|---|---|---|
+| FPS (mean) | 32.67 | 39.02 | +6.35 (+19.4%) |
+| Compositing mean (ms) | 9.51 | 5.72 | -3.80 |
+| Mask/alpha prep mean (ms) | 3.01 | 0.60 | -2.41 |
+| Blend mean (ms) | 2.87 | 1.59 | -1.28 |
+
+- Reduced alpha prep overhead (fewer conversions/expansions; avoid redundant 3-channel alpha work where possible).
+- Reduced blend cost by minimizing per-frame allocations and using uint8-friendly OpenCV ops in the hot path.
+
+Quality impact: negligible (see `scripts/compare_compositing_precision.py`; PSNR ~51 dB on webcam frame).
+
+Repro (full clip loop benchmark):
+```bash
+# Legacy
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --comp-mode soft --alpha-path legacy \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
+
+# Optimized
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --comp-mode soft --alpha-path optimized \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json
+```
+
+Artifacts: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
+`benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`.
 
 ## Temporal stability ([RVM](#acronym-rvm) vs no temporal state)
 
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
+Jitter measures frame-to-frame matte instability: mean absolute change in alpha (α) between consecutive frames.
 Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
-Attribution: Pexels video "A woman talking in front of the computer while drinking" (ID 6517471).
+Attribution: Pexels video "A woman talking in front of the computer while drinking" (ID 6517471). Downloaded locally for benchmarking; not redistributed.
 Primary edge definition: Sobel gradient magnitude (threshold 0.02). Auxiliary: alpha band 0.1-0.9.
 We use Sobel(α) magnitude > 0.02 as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
 

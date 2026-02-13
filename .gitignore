@@ -28,3 +28,4 @@ data/
 demos/
 scripts/sitecustomize.py
 benchmarks/*.mp4
+benchmarks/archive/

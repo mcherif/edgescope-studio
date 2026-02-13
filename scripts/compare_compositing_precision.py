@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import argparse
 import cv2
 import numpy as np
 
@@ -36,6 +37,16 @@ def psnr(a, b):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--video", type=str, default=None,
+                    help="Optional video path to use first frame for comparison")
+    ap.add_argument("--comp-mode", type=str, default="soft",
+                    choices=["soft", "hard", "trimap"])
+    ap.add_argument("--alpha-thresh", type=int, default=128)
+    ap.add_argument("--alpha-lo", type=int, default=32)
+    ap.add_argument("--alpha-hi", type=int, default=224)
+    ap.add_argument("--alpha-feather", type=int, default=0)
+    args = ap.parse_args()
     # Use one real image if available; otherwise random but prefer real.
     # Prefer demos/webcam_frame.png, then sample_image.png, else fallback to random.
     webcam_path = REPO_ROOT / "demos" / "webcam_frame.png"
@@ -43,7 +54,17 @@ def main():
 
     img = None
     img_src = "random"
-    if webcam_path.exists():
+
+    if args.video:
+        cap = cv2.VideoCapture(args.video)
+        ok, frame = cap.read()
+        cap.release()
+        if ok and frame is not None:
+            img = frame
+            img_src = f"{args.video} (first frame)"
+        else:
+            print(f"Failed to read first frame from {args.video}; falling back.")
+    if img is None and webcam_path.exists():
         img = cv2.imread(str(webcam_path))
         if img is None:
             print(f"Failed to read {webcam_path}; falling back.")
@@ -73,7 +94,15 @@ def main():
 
     # Old vs new outputs
     out_slow = slow_float_blend(img, blurred, alpha)
-    fast = FastBlur(downscale=0.25, sigma=8.0)
+    fast = FastBlur(
+        downscale=0.25,
+        sigma=8.0,
+        comp_mode=args.comp_mode,
+        alpha_thresh=args.alpha_thresh,
+        alpha_lo=args.alpha_lo,
+        alpha_hi=args.alpha_hi,
+        alpha_feather=args.alpha_feather,
+    )
     out_fast = fast.apply(img, alpha)
 
     diff = out_slow.astype(np.int16) - out_fast.astype(np.int16)
