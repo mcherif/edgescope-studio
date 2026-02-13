@@ -44,6 +44,14 @@ def main() -> int:
     ap.add_argument("--input-size", type=int, default=512)
     ap.add_argument("--downsample", type=float, default=0.25)
     ap.add_argument("--blur", type=int, default=51)
+    ap.add_argument("--blur-scale", type=float, default=0.5)
+    ap.add_argument("--blur-sigma", type=float, default=8.0)
+    ap.add_argument("--comp-mode", type=str, default="soft",
+                    choices=["soft", "hard", "trimap"])
+    ap.add_argument("--alpha-thresh", type=int, default=128)
+    ap.add_argument("--alpha-lo", type=int, default=32)
+    ap.add_argument("--alpha-hi", type=int, default=224)
+    ap.add_argument("--alpha-feather", type=int, default=0)
     ap.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
     args = ap.parse_args()
 
@@ -67,7 +75,15 @@ def main() -> int:
     )
 
     # blur = BackgroundBlur(blur_kernel=args.blur)
-    blur = BackgroundBlur(downscale=0.25, sigma=8.0)
+    blur = BackgroundBlur(
+        blur_scale=args.blur_scale,
+        sigma=args.blur_sigma,
+        comp_mode=args.comp_mode,
+        alpha_thresh=args.alpha_thresh,
+        alpha_lo=args.alpha_lo,
+        alpha_hi=args.alpha_hi,
+        alpha_feather=args.alpha_feather,
+    )
 
     backend_map = {
         "any": 0,

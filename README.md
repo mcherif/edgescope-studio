@@ -147,6 +147,43 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 - Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
 - Virtual cameras can change capture timing; probe with the virtual cam ON if that's your usage.
 - First-run warmup effects; the benchmark includes a warmup phase to reduce first-frame skew.
+ - Trimap compositing (hard fg/bg + soft edge band) was tested as an optimization but measured slower due to mask construction overhead (see `benchmarks/rvm_512_ds025_720p_blur_soft_profile.json` vs `benchmarks/rvm_512_ds025_720p_blur_trimap_profile.json`).
+
+### Compositing optimization (CPU)
+
+Optimized compositing improved throughput by +19.4% on a 10s 720p clip (32.67 → 39.02 FPS) by cutting compositing cost (9.51 → 5.72 ms).
+
+| Metric | Legacy | Optimized | Delta |
+|---|---|---|---|
+| FPS (mean) | 32.67 | 39.02 | +6.35 (+19.4%) |
+| Compositing mean (ms) | 9.51 | 5.72 | -3.80 |
+| Mask/alpha prep mean (ms) | 3.01 | 0.60 | -2.41 |
+| Blend mean (ms) | 2.87 | 1.59 | -1.28 |
+
+- Reduced alpha prep overhead (fewer conversions/expansions; avoid redundant 3-channel alpha work where possible).
+- Reduced blend cost by minimizing per-frame allocations and using uint8-friendly OpenCV ops in the hot path.
+
+Quality impact: negligible (see `scripts/compare_compositing_precision.py`; PSNR ~51 dB on webcam frame).
+
+Repro (full clip loop benchmark):
+```bash
+# Legacy
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --comp-mode soft --alpha-path legacy \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
+
+# Optimized
+python scripts/benchmark_video.py --device cuda \
+  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
+  --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
+  --blur --blur-scale 0.5 --comp-mode soft --alpha-path optimized \
+  --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json
+```
+
+Artifacts: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
+`benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`.
 
 ## Temporal stability ([RVM](#acronym-rvm) vs no temporal state)
 
