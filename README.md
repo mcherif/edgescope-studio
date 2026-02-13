@@ -14,6 +14,8 @@ The core idea:
 
 Video mode uses RVM to produce a temporally-stable alpha matte per frame; no detector/SAM in the loop.
 
+Why RVM vs detect+SAM for video: RVM is video-native and keeps recurrent state, so edges stay stable frame-to-frame and inference is faster than running detector + SAM on every frame.
+
 This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
 For real-time portrait effects we use **Robust Video Matting ([RVM](#acronym-rvm))** (video-native, recurrent temporal states).
@@ -117,18 +119,7 @@ Produces: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_
 `benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json`,
 `benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json`.
 
-## Appendix: Additional benchmarks
-
-### Webcam capture (secondary)
-
-Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
-
-| Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
-|------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
-| ON   | 29.6       | 33.7            | 41.9           | 20.1            | 25.3           | 10.1           | 11.4          |
-| OFF  | 29.9       | 33.4            | 45.8           | 20.5            | 28.0           | 0.0            | 0.0           |
-
-### How to reproduce
+**Repro commands (webcam, secondary):**
 ```bash
 # Blur ON (backend pinned for reproducibility)
 python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
@@ -140,6 +131,17 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
   --width 1280 --height 720 --duration 30 \
   --out benchmarks/rvm_512_ds025_720p_no_blur.json
 ```
+
+## Appendix: Backend variability
+
+### Webcam capture (secondary)
+
+Collected with `scripts/benchmark_video.py` (30s, `--input-size 512 --downsample 0.25`). Backend pinned to `dshow` (the cached winner on this machine).
+
+| Blur | FPS (mean) | Total mean (ms) | Total p95 (ms) | Infer mean (ms) | Infer p95 (ms) | Comp mean (ms) | Comp p95 (ms) |
+|------|------------|-----------------|----------------|-----------------|----------------|----------------|---------------|
+| ON   | 29.6       | 33.7            | 41.9           | 20.1            | 25.3           | 10.1           | 11.4          |
+| OFF  | 29.9       | 33.4            | 45.8           | 20.5            | 28.0           | 0.0            | 0.0           |
 
 **Known issues**
 - Windows capture backend variability (camera/driver/virtual-cam). Use `scripts/probe_backends.py` and pin `--backend` when benchmarking.
