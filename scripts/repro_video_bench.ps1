@@ -9,6 +9,8 @@ param(
   [double]$BlurScale = 0.5,
   [double]$BlurSigma = 8.0,
   [string]$VideoUrl = "https://www.pexels.com/download/video/6517471/",
+  [string]$ScriptUrl = "https://raw.githubusercontent.com/mcherif/edgescope-studio/main/scripts/benchmark_video.py",
+  [switch]$UseLocalScript,
   [switch]$Legacy
 )
 
@@ -20,6 +22,14 @@ Set-Location $root
 
 Write-Host "Streaming benchmark clip from: $VideoUrl"
 
+$scriptPath = Join-Path $PSScriptRoot "benchmark_video.remote.py"
+if ($UseLocalScript) {
+  $scriptPath = Join-Path $PSScriptRoot "benchmark_video.py"
+} else {
+  Write-Host "Fetching benchmark script from: $ScriptUrl"
+  Invoke-WebRequest -Uri $ScriptUrl -OutFile $scriptPath
+}
+
 $alphaPath = "optimized"
 if ($Legacy) { $alphaPath = "legacy" }
 
@@ -27,7 +37,7 @@ $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s
 if ($Legacy) { $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json" }
 
 Write-Host "Running benchmark..."
-python scripts/benchmark_video.py --device $Device --backend $Backend `
+python $scriptPath --device $Device --backend $Backend `
   --video $VideoUrl --video-frame-index 0 --video-frame-count 0 `
   --input-size $InputSize --downsample $Downsample --width $Width --height $Height --duration $Duration `
   --blur --blur-scale $BlurScale --blur-sigma $BlurSigma --comp-mode soft --alpha-path $alphaPath `
