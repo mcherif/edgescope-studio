@@ -27,16 +27,4 @@ data/
 *.pptx
 demos/
 scripts/sitecustomize.py
-<<<<<<< feat/temporal-stability
 benchmarks/*.mp4
-=======
-
-
-# Python cache
-__pycache__/
-*.pyc
-
-# Large model artifacts (downloaded)
-models/*.onnx
-
->>>>>>> main

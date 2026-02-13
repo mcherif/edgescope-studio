@@ -1,3 +1,5 @@
+[![Video CI](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml/badge.svg?branch=main)](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml)
+
 **EdgeScope Studio** is a **local-first** computer vision lab for prototyping **image and video** pipelines on your own machine (offline).
 
 It has two modes:
@@ -188,5 +190,5 @@ Note: This metric is scene-dependent; rerun with real motion to see temporal ben
 | Acronym | Meaning |
 |---------|---------|
 | <a id="acronym-rtmdet"></a>RTMDet | Real-Time Multi-Object Detection |
-| <a id="acronym-rvm"></a>RVM | Robust Video Matting   |
+| <a id="acronym-rvm"></a>RVM | Robust Video Matting |
 | <a id="acronym-sam"></a>SAM | Segment Anything Model |

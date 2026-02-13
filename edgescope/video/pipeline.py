@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import List
 
 import cv2
 import numpy as np
