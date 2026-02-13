@@ -77,28 +77,18 @@ Note: Results can vary by camera/driver/virtual-cam; run `scripts/probe_backends
 
 Related scripts: `scripts/run_video.py`, `scripts/benchmark_video.py`, `scripts/compare_compositing_precision.py`.
 
-## Benchmark snapshot (frozen config)
+## Results (frozen config)
 
-**Primary input:** Pexels clip (file)  
-**Secondary:** webcam (capture variability)  
-**Frozen settings:** `512 / 0.25 / 720p / dshow / blur_scale=0.5 / blur_sigma=8`
+**Primary input:** Pexels clip (file input; webcam is secondary due to capture variability)  
+**Settings:** `512 / 0.25 / 720p / backend=dshow / blur_scale=0.5 / blur_sigma=8`
 
-| Category | Metric | Result |
-|---|---|---|
-| Performance (optimized) | FPS mean | **39.02** |
-|  | Total latency p95 | **29.96 ms** |
-| Temporal stability (Sobel edge jitter mean) | OFF -> ON | **0.08246 -> 0.06315** (**-23.4%**) |
-| Compositing optimization | comp mean (legacy -> optimized) | **9.51 -> 5.72 ms** |
-|  | FPS (legacy -> optimized) | **32.67 -> 39.02** (**+19.4%**) |
+Performance (optimized): FPS mean 39.02, total p95 29.96 ms  
+Temporal stability (Sobel edge jitter mean): OFF 0.08246 -> ON 0.06315 (-23.4%)  
+Compositing win (legacy -> optimized): comp mean 9.51 -> 5.72 ms, FPS 32.67 -> 39.02 (+19.4%)
 
-Optimization: keep alpha work in uint8-friendly OpenCV ops and avoid repeated 3-channel alpha expansion / per-frame allocations in the hot path.
+Webcam note: Webcam numbers vary with capture backend and scene motion; see Appendix.
 
-- Reduced alpha prep overhead (fewer conversions/expansions; avoid redundant 3-channel alpha work where possible).
-- Reduced blend cost by minimizing per-frame allocations and using uint8-friendly OpenCV ops in the hot path.
-
-Quality impact: negligible (see `scripts/compare_compositing_precision.py`; PSNR ~51 dB on webcam frame).
-
-**Reproduce:**
+**Repro commands (file input):**
 ```bash
 # Performance (optimized)
 python scripts/benchmark_video.py --device cuda \
@@ -122,12 +112,12 @@ python scripts/benchmark_video.py --device cuda \
   --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
 ```
 
-Artifacts: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`,
+Produces: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`,
 `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
 `benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json`,
 `benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json`.
 
-## Additional benchmarks / notes
+## Appendix: Additional benchmarks
 
 ### Webcam capture (secondary)
 
