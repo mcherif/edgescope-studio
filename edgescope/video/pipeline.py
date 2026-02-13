@@ -52,7 +52,7 @@ class RVMPipeline:
             raise RuntimeError(f"Model missing required inputs: {missing}")
 
         print(
-            f"✓ RVMPipeline ready: provider={self.session.get_providers()[0]}, input={self.input_size}x{self.input_size}")
+            f"OK: RVMPipeline ready: provider={self.session.get_providers()[0]}, input={self.input_size}x{self.input_size}")
         # Burn-in to avoid first-frame latency spike skewing metrics
         dummy = np.zeros(
             (1, 3, self.input_size, self.input_size), dtype=np.float32)
@@ -70,9 +70,10 @@ class RVMPipeline:
             )
             self.rec = [r1o, r2o, r3o, r4o]
 
-    def reset(self) -> None:
+    def reset(self, verbose: bool = True) -> None:
         self.rec = [np.zeros((1, 1, 1, 1), dtype=np.float32) for _ in range(4)]
-        print("RVM recurrent states reset")
+        if verbose:
+            print("RVM recurrent states reset")
 
     def _preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
         # Resize to model input

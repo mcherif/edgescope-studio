@@ -3,6 +3,7 @@ from __future__ import annotations
 # ruff: noqa: E402
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,15 @@ def main() -> int:
     ap.add_argument("--camera", type=int, default=0)
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
+    ap.add_argument("--fps", type=int, default=30)
+    ap.add_argument("--backend", type=str, default="auto",
+                    choices=["auto", "any", "dshow", "msmf"])
+    ap.add_argument("--reprobe", action="store_true",
+                    help="Ignore cached backend probe and re-test.")
+    ap.add_argument("--max-frames", type=int, default=0,
+                    help="Process N frames then exit (0 = run forever).")
+    ap.add_argument("--headless", action="store_true",
+                    help="Disable window display (useful for testing).")
     ap.add_argument("--model", type=str,
                     default="models/rvm_mobilenetv3_fp32.onnx")
     ap.add_argument("--input-size", type=int, default=512)
@@ -59,11 +69,207 @@ def main() -> int:
     # blur = BackgroundBlur(blur_kernel=args.blur)
     blur = BackgroundBlur(downscale=0.25, sigma=8.0)
 
-    cap = cv2.VideoCapture(args.camera)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    cap.set(cv2.CAP_PROP_FPS, 30)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    backend_map = {
+        "any": 0,
+        "dshow": cv2.CAP_DSHOW,
+        "msmf": cv2.CAP_MSMF,
+    }
+
+    def open_camera(backend: str) -> cv2.VideoCapture:
+        api = backend_map.get(backend.lower(), 0)
+        cam = cv2.VideoCapture(args.camera, api)
+        cam.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+        cam.set(cv2.CAP_PROP_FPS, args.fps)
+        cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        return cam
+
+    cache_path = Path(__file__).resolve().parents[1] / "data" / "cache" / "backend_probe.json"
+    cache_key = f"{args.camera}:{args.width}x{args.height}:{args.fps}"
+
+    def read_cache() -> dict | None:
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        entry = cache.get(cache_key)
+        if not isinstance(entry, dict):
+            return None
+        winner = entry.get("winner")
+        if winner not in ("msmf", "dshow", "any"):
+            return None
+        return entry
+
+    def write_cache(winner: str, winner_reason: str, results: dict) -> None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            cache = {}
+        cache[cache_key] = {
+            "winner": winner,
+            "winner_reason": winner_reason,
+            "timestamp": time.time(),
+            "camera": args.camera,
+            "width": args.width,
+            "height": args.height,
+            "fps": args.fps,
+            "backends": results,
+        }
+        cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+
+    def probe_backend(duration_s: float = 3.0) -> str:
+        candidates = ["msmf", "dshow"]
+        results = {}
+        for backend in candidates:
+            cam = open_camera(backend)
+            if not cam.isOpened():
+                cam.release()
+                continue
+
+            # Camera health check: verify we can read frames and they're not all identical.
+            start = time.perf_counter()
+            got_frame = False
+            last = None
+            same_count = 0
+            warning_count = 0
+            while time.perf_counter() - start < 1.0:
+                ok, frame = cam.read()
+                if not ok:
+                    warning_count += 1
+                    continue
+                got_frame = True
+                if last is not None and frame.shape == last.shape and np.array_equal(frame, last):
+                    same_count += 1
+                    if same_count >= 5:
+                        cam.release()
+                        results[backend] = {
+                            "fps_mean": 0.0,
+                            "total_p95_ms": float("inf"),
+                            "status": "UNSTABLE",
+                            "warning_count": warning_count,
+                            "reason": "inactive/identical",
+                        }
+                        break
+                else:
+                    same_count = 0
+                last = frame
+            if backend in results:
+                continue
+            if not got_frame:
+                cam.release()
+                results[backend] = {
+                    "fps_mean": 0.0,
+                    "total_p95_ms": float("inf"),
+                    "status": "UNSTABLE",
+                    "warning_count": warning_count,
+                    "reason": "inactive/no_frames",
+                }
+                continue
+
+            # quick warmup
+            for _ in range(10):
+                ok, frame = cam.read()
+                if not ok:
+                    warning_count += 1
+                    continue
+                _ = pipeline.process_frame(frame)
+
+            pipeline.reset()
+
+            total_ms = []
+            frames = 0
+            start = time.perf_counter()
+            while True:
+                now = time.perf_counter()
+                if now - start >= duration_s:
+                    break
+                t0 = time.perf_counter()
+                ok, frame = cam.read()
+                if not ok:
+                    warning_count += 1
+                    continue
+                _ = pipeline.process_frame(frame)
+                t1 = time.perf_counter()
+                total_ms.append((t1 - t0) * 1000.0)
+                frames += 1
+
+            cam.release()
+
+            elapsed = time.perf_counter() - start
+            fps = frames / elapsed if elapsed > 0 else 0.0
+            p95 = np.percentile(
+                total_ms, 95) if total_ms else float("inf")
+            status = "OK" if warning_count == 0 else "UNSTABLE"
+            reason = "" if warning_count == 0 else f"read_failures={warning_count}"
+            results[backend] = {
+                "fps_mean": float(fps),
+                "total_p95_ms": float(p95),
+                "status": status,
+                "warning_count": warning_count,
+                "reason": reason,
+            }
+
+        for backend, res in results.items():
+            print(
+                f"{backend}: fps={res['fps_mean']:.2f} "
+                f"p95_total={res['total_p95_ms']:.2f}ms "
+                f"status={res['status']} "
+                f"(warning_count={int(res['warning_count'])})"
+            )
+
+        if not results:
+            return "msmf"
+
+        stable = {k: v for k, v in results.items() if v.get("status") == "OK"}
+        pool = stable if stable else results
+        winner_reason = "stable" if stable else "all_unstable"
+
+        # If fps is within 5%, choose lower p95_total; otherwise choose higher fps.
+        if "msmf" in pool and "dshow" in pool:
+            fps_m = pool["msmf"]["fps_mean"]
+            fps_d = pool["dshow"]["fps_mean"]
+            max_fps = max(fps_m, fps_d)
+            if max_fps > 0 and abs(fps_m - fps_d) / max_fps < 0.05:
+                winner = "msmf" if pool["msmf"]["total_p95_ms"] < pool["dshow"]["total_p95_ms"] else "dshow"
+            else:
+                winner = "msmf" if fps_m > fps_d else "dshow"
+        else:
+            winner = sorted(
+                pool.items(), key=lambda kv: (-kv[1]["fps_mean"], kv[1]["total_p95_ms"])
+            )[0][0]
+
+        if stable:
+            unstable = [k for k, v in results.items() if v.get("status") != "OK"]
+            if unstable:
+                winner_reason = f"{','.join(unstable)}_unstable"
+
+        print(f"winner: {winner} ({winner_reason})")
+        write_cache(winner, winner_reason, results)
+        return winner
+
+    backend = args.backend
+    if backend == "auto":
+        if not args.reprobe:
+            cached = read_cache()
+        else:
+            cached = None
+
+        if cached is not None:
+            backend = cached["winner"]
+            reason = cached.get("winner_reason", "cached")
+            print(
+                f"Recommended backend on this machine (cached): {backend} "
+                f"({reason})"
+            )
+            print("Override: --backend msmf|dshow, Reprobe: --reprobe")
+        else:
+            backend = probe_backend()
+            print(f"Recommended backend on this machine: {backend}")
+            print("Override: --backend msmf|dshow, Reprobe: --reprobe")
+        pipeline.reset()
+
+    cap = open_camera(backend)
 
     if not cap.isOpened():
         print(f"ERROR: cannot open camera {args.camera}")
@@ -71,7 +277,10 @@ def main() -> int:
 
     actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"Camera opened: {actual_w}x{actual_h}")
+    print(
+        f"Camera opened: {actual_w}x{actual_h} backend={backend} "
+        f"(try scripts/probe_backends.py to compare)"
+    )
 
     # FPS smoothing
     fps_ema = None
@@ -115,7 +324,11 @@ def main() -> int:
             cv2.putText(out, f"RVM latency: {res.latency_ms:5.1f} ms", (
                 20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-            cv2.imshow("EdgeScope Video", out)
+            if not args.headless:
+                cv2.imshow("EdgeScope Video", out)
+                # If user closes the window, stop the loop cleanly.
+                if cv2.getWindowProperty("EdgeScope Video", cv2.WND_PROP_VISIBLE) < 1:
+                    break
             t3 = time.perf_counter()
 
             infer_ms = (t1 - t0) * 1000
@@ -129,14 +342,18 @@ def main() -> int:
                     flush=True,
                 )
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
+            if not args.headless:
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                elif key == ord("b"):
+                    debug = not debug
+                    print(f"Debug view: {'ON' if debug else 'OFF'}")
+                elif key == ord("r"):
+                    pipeline.reset()
+
+            if args.max_frames > 0 and frame_idx >= args.max_frames:
                 break
-            elif key == ord("b"):
-                debug = not debug
-                print(f"Debug view: {'ON' if debug else 'OFF'}")
-            elif key == ord("r"):
-                pipeline.reset()
 
     finally:
         cap.release()

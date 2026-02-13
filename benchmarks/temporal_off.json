@@ -1,0 +1,35 @@
+{
+  "config": {
+    "camera": 0,
+    "backend": "dshow",
+    "capture_resolution": [
+      1280,
+      720
+    ],
+    "fps": 30,
+    "device": "cuda",
+    "model": "models/rvm_mobilenetv3_fp32.onnx",
+    "input_size": 512,
+    "downsample_ratio": 0.25,
+    "warmup_frames": 30,
+    "duration_s": 30,
+    "jitter_edge_band": [
+      0.1,
+      0.9
+    ],
+    "jitter_grad_thresh": 0.02
+  },
+  "results": {
+    "label": "temporal_off",
+    "frames": 774,
+    "elapsed_s": 30.071843500016257,
+    "fps_mean": 25.738362199164197,
+    "jitter_all_mean": 0.005108799319714308,
+    "jitter_all_p95": 0.010172669962048528,
+    "jitter_edge_mean": 0.03989598900079727,
+    "jitter_edge_p95": 0.07766884565353392,
+    "edge_fraction_mean": 0.0801403746008873,
+    "edge_fraction_p95": 0.09848328791558739,
+    "reset_each_frame": true
+  }
+}

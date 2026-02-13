@@ -84,8 +84,12 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--fps", type=int, default=30)
+<<<<<<< feat/temporal-stability
+    ap.add_argument("--backend", type=str, default="dshow",
+=======
 
     ap.add_argument("--backend", type=str, default="msmf",
+>>>>>>> main
                     choices=["any", "dshow", "msmf"])
 
     ap.add_argument("--model", type=str,
@@ -128,6 +132,17 @@ def main() -> int:
         input_size=int(args.input_size),
         downsample_ratio=float(args.downsample),
     )
+<<<<<<< feat/temporal-stability
+    if args.device == "cuda" and "CUDAExecutionProvider" not in pipeline.session.get_providers():
+        cap.release()
+        print(
+            "ERROR: CUDAExecutionProvider not available; refusing to fall back to CPU. "
+            "Install CUDA-enabled onnxruntime or use --device cpu.",
+            file=sys.stderr,
+        )
+        return 3
+=======
+>>>>>>> main
 
     compositor: Optional[BackgroundBlur] = None
     if args.blur:

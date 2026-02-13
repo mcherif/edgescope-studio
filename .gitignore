@@ -1,10 +1,14 @@
 # Bytecode / cache
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
 
 # Model weights and large artifacts
 *.pth
 rtmdet/
+models/*.onnx
 
 # App/cache outputs
 data/cache/
@@ -18,20 +22,14 @@ venv/
 # VS Code settings
 .vscode/
 
-# ONNX models (downloaded by setup scripts)
-models/*.onnx
-
-
-# Python cache
-__pycache__/
-*.pyc
-
-
 # Local artifacts
 data/
 *.pptx
 demos/
 scripts/sitecustomize.py
+<<<<<<< feat/temporal-stability
+benchmarks/*.mp4
+=======
 
 
 # Python cache
@@ -41,3 +39,4 @@ __pycache__/
 # Large model artifacts (downloaded)
 models/*.onnx
 
+>>>>>>> main
