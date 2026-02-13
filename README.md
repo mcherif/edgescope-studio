@@ -60,7 +60,7 @@ Probe directly:
 python scripts/probe_backends.py --device cuda --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 20
 ```
 
-Benchmark (headless):
+### 4) Benchmark (headless)
 ```bash
 # Blur ON (pin backend for reproducibility)
 python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
@@ -150,6 +150,7 @@ python scripts/benchmark_video.py --device cuda --backend dshow --input-size 512
 
 ## What's implemented
 
+- **Video mode ([RVM](#acronym-rvm))**: real-time portrait matting + background blur with temporal stability, backend auto-probe/caching, and headless benchmarking.
 - Image demo with **[RTMDet](#acronym-rtmdet) Tiny (COCO)** for boxes + labels.
 - **Segment Anything ([SAM](#acronym-sam) ViT-B)** turns those boxes into masks; toggleable in the UI.
 - Class whitelist + aliases in `config/classes.yaml` (single source of truth).
