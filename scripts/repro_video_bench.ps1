@@ -80,8 +80,8 @@ function Ensure-Venv([string]$root) {
     Write-Host "Creating venv: $venvDir"
     python -m venv $venvDir
     Write-Host "Installing deps into venv..."
-    & $venvPy -m pip install --upgrade pip
-    & $venvPy -m pip install onnxruntime-gpu opencv-python numpy
+    & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
+    & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
   }
   if (Test-Path $venvPy) { return $venvPy }
   return "python"
@@ -109,6 +109,7 @@ if (-not $repoRoot) {
 Set-Location $repoRoot
 
 $py = Ensure-Venv $repoRoot
+Write-Host "Using Python: $py"
 Ensure-Model $repoRoot $py
 
 $localBenchPath = Join-Path $repoRoot "benchmarks/6517471-hd_1920_1080_30fps.mp4"
