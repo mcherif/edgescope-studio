@@ -27,6 +27,7 @@ param(
   [string]$VideoUrl = "https://www.pexels.com/download/video/6517471/",
   [string]$VideoCachePath = "$env:TEMP\\edgescope-bench-6517471.mp4",
   [switch]$ForceDownload,
+  [string]$CudaPath = "",
   [string]$ScriptUrl = "https://raw.githubusercontent.com/mcherif/edgescope-studio/main/scripts/benchmark_video.py",
   [string]$RepoZipUrl = "https://github.com/mcherif/edgescope-studio/archive/refs/heads/main.zip",
   [string]$RepoCacheDir = "$env:TEMP\\edgescope-studio-main",
@@ -143,6 +144,17 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
+$condaBin = $null
+if ($env:CONDA_PREFIX) {
+  $condaBin = Join-Path $env:CONDA_PREFIX "Library\\bin"
+}
+if ($condaBin -and (Test-Path $condaBin) -and (-not $env:PATH.Contains($condaBin))) {
+  $env:PATH = "$condaBin;$env:PATH"
+}
+if ($CudaPath -and (Test-Path $CudaPath) -and (-not $env:PATH.Contains($CudaPath))) {
+  $env:PATH = "$CudaPath;$env:PATH"
+}
+
 $py = Resolve-Python $repoRoot
 Write-Host "Using Python: $py"
 Ensure-Model $repoRoot $py
@@ -187,6 +199,9 @@ if ($Device -eq "cuda") {
   if (@($missingDlls).Count -gt 0) {
     $msg = "CUDA DLLs missing: " + ($missingDlls -join ", ")
     if ($ForceCuda) { throw $msg }
+    if (-not $env:CONDA_PREFIX -and -not $CudaPath) {
+      $msg += ". If you have a CUDA conda env, run this script from that env, or pass -CudaPath `<path-to-cuda-bin>`."
+    }
     Write-Warning "$msg. Falling back to CPU for this run."
     $deviceEffective = "cpu"
   }
