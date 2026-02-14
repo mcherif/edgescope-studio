@@ -176,7 +176,7 @@ if ($Device -eq "cuda") {
   $providers = Get-Providers $py
   Write-Host "ONNX Runtime providers: $providers"
   $missingDlls = Get-MissingCudaDlls
-  if ($missingDlls.Count -gt 0) {
+  if (@($missingDlls).Count -gt 0) {
     $msg = "CUDA DLLs missing: " + ($missingDlls -join ", ")
     if ($ForceCuda) { throw $msg }
     Write-Warning "$msg. Falling back to CPU for this run."
