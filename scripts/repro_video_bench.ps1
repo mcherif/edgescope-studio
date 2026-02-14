@@ -1,3 +1,16 @@
+<#
+One-click repro for the frozen video benchmark.
+
+Defaults:
+- Uses local benchmarks clip if present, then temp cache, else downloads.
+- Fetches benchmark script from GitHub main (use -UseLocalScript to override).
+
+Examples:
+  .\repro_video_bench.ps1
+  .\repro_video_bench.ps1 -Legacy
+  .\repro_video_bench.ps1 -ForceDownload
+  .\repro_video_bench.ps1 -UseLocalScript
+#>
 param(
   [string]$Device = "cuda",
   [string]$Backend = "dshow",
