@@ -10,6 +10,7 @@ Examples:
   .\repro_video_bench.ps1
   .\repro_video_bench.ps1 -Setup
   .\repro_video_bench.ps1 -UseVenv
+  .\repro_video_bench.ps1 -SetupNoConda
   .\repro_video_bench.ps1 -Legacy
   .\repro_video_bench.ps1 -ForceDownload
   .\repro_video_bench.ps1 -UseLocalScript
@@ -17,6 +18,7 @@ Examples:
 param(
   [switch]$Setup,
   [switch]$UseVenv,
+  [switch]$SetupNoConda,
   [string]$Device = "cuda",
   [string]$Backend = "dshow",
   [int]$InputSize = 512,
@@ -78,19 +80,23 @@ function Ensure-Python {
 function Resolve-Python([string]$root) {
   $venvDir = Join-Path $root ".venv-video"
   $venvPy = Join-Path $venvDir "Scripts/python.exe"
-  if ($Setup -or $UseVenv) {
+  if ($Setup -or $SetupNoConda -or $UseVenv) {
     Ensure-Python
     if (-not (Test-Path $venvPy)) {
       Write-Host "Creating venv: $venvDir"
       python -m venv $venvDir
     }
-    if ($Setup) {
+    if ($Setup -or $SetupNoConda) {
       Write-Host "Installing deps into venv..."
       & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
       & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
+      if ($SetupNoConda) {
+        Write-Host "Installing CUDA runtime/cuDNN wheels (no conda)..."
+        & $venvPy -m pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12 2>&1 | Out-Host
+      }
     }
   }
-  if (($Setup -or $UseVenv) -and (Test-Path $venvPy)) {
+  if (($Setup -or $SetupNoConda -or $UseVenv) -and (Test-Path $venvPy)) {
     Write-Host "Using venv: $venvDir"
     return $venvPy
   }
@@ -212,6 +218,18 @@ if ($CudaPath) {
 
 $py = Resolve-Python $repoRoot
 Write-Host "Using Python: $py"
+
+if ($SetupNoConda) {
+  $sitePackages = & $py -c "import site; print(site.getsitepackages()[0])"
+  $cudnnBin = Join-Path $sitePackages "nvidia\\cudnn\\bin"
+  $cublasBin = Join-Path $sitePackages "nvidia\\cublas\\bin"
+  $cudaRtBin = Join-Path $sitePackages "nvidia\\cuda_runtime\\bin"
+  foreach ($p in @($cudnnBin, $cublasBin, $cudaRtBin)) {
+    if (Test-Path $p -and (-not $env:PATH.Contains($p))) {
+      $env:PATH = "$p;$env:PATH"
+    }
+  }
+}
 Ensure-Model $repoRoot $py
 
 $localBenchPath = Join-Path $repoRoot "benchmarks/6517471-hd_1920_1080_30fps.mp4"
