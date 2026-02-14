@@ -102,6 +102,33 @@ function Get-Providers([string]$py) {
   return & $py -c $code
 }
 
+$cudaBase = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA"
+if (Test-Path $cudaBase) {
+  $cudaDirs = Get-ChildItem $cudaBase -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+  if ($cudaDirs.Count -gt 0) {
+    $cudaBin = Join-Path $cudaDirs[0].FullName "bin"
+    if (Test-Path $cudaBin -and (-not $env:PATH.Contains($cudaBin))) {
+      $env:PATH = "$cudaBin;$env:PATH"
+    }
+  }
+}
+
+function Test-DllInPath([string]$dll) {
+  foreach ($p in ($env:PATH -split ';')) {
+    if ($p -and (Test-Path (Join-Path $p $dll))) { return $true }
+  }
+  return $false
+}
+
+function Get-MissingCudaDlls {
+  $required = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll")
+  $missing = @()
+  foreach ($dll in $required) {
+    if (-not (Test-DllInPath $dll)) { $missing += $dll }
+  }
+  return $missing
+}
+
 $repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
 if (-not $repoRoot) {
   $repoRoot = Ensure-Repo $RepoZipUrl $RepoCacheDir
@@ -148,8 +175,15 @@ $deviceEffective = $Device
 if ($Device -eq "cuda") {
   $providers = Get-Providers $py
   Write-Host "ONNX Runtime providers: $providers"
+  $missingDlls = Get-MissingCudaDlls
+  if ($missingDlls.Count -gt 0) {
+    $msg = "CUDA DLLs missing: " + ($missingDlls -join ", ")
+    if ($ForceCuda) { throw $msg }
+    Write-Warning "$msg. Falling back to CPU for this run."
+    $deviceEffective = "cpu"
+  }
   $hasCuda = $providers -match "CUDAExecutionProvider"
-  if (-not $hasCuda) {
+  if (-not $hasCuda -and $deviceEffective -eq "cuda") {
     if ($ForceCuda) {
       throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
     }
