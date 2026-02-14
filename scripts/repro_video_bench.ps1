@@ -151,8 +151,19 @@ if ($env:CONDA_PREFIX) {
 if ($condaBin -and (Test-Path $condaBin) -and (-not $env:PATH.Contains($condaBin))) {
   $env:PATH = "$condaBin;$env:PATH"
 }
-if ($CudaPath -and (Test-Path $CudaPath) -and (-not $env:PATH.Contains($CudaPath))) {
-  $env:PATH = "$CudaPath;$env:PATH"
+if ($CudaPath) {
+  $paths = $CudaPath -split ';'
+  foreach ($p in $paths) {
+    $trim = $p.Trim()
+    if ($trim -eq "") { continue }
+    if (-not (Test-Path $trim)) {
+      Write-Warning "CudaPath not found: $trim"
+      continue
+    }
+    if (-not $env:PATH.Contains($trim)) {
+      $env:PATH = "$trim;$env:PATH"
+    }
+  }
 }
 
 $py = Resolve-Python $repoRoot
@@ -200,20 +211,22 @@ if ($Device -eq "cuda") {
     $msg = "CUDA DLLs missing: " + ($missingDlls -join ", ")
     if ($ForceCuda) { throw $msg }
     if (-not $env:CONDA_PREFIX -and -not $CudaPath) {
-      $msg += ". If you have a CUDA conda env, run this script from that env, or pass -CudaPath `<path-to-cuda-bin>`."
+      $msg += ". If you have a CUDA conda env, run this script from that env, or pass -CudaPath `<path-to-cuda-bin>` (cuDNN bin)."
     }
     Write-Warning "$msg. Falling back to CPU for this run."
     $deviceEffective = "cpu"
   }
-  $hasCuda = $providers -match "CUDAExecutionProvider"
-  if (-not $hasCuda -and $deviceEffective -eq "cuda") {
-    if ($ForceCuda) {
-      throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
+  if ($deviceEffective -eq "cuda") {
+    $hasCuda = $providers -match "CUDAExecutionProvider"
+    if (-not $hasCuda) {
+      if ($ForceCuda) {
+        throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
+      }
+      Write-Warning "CUDAExecutionProvider not available; falling back to CPU for this run."
+      $deviceEffective = "cpu"
+    } else {
+      Write-Host "CUDAExecutionProvider available; using CUDA."
     }
-    Write-Warning "CUDAExecutionProvider not available; falling back to CPU for this run."
-    $deviceEffective = "cpu"
-  } else {
-    Write-Host "CUDAExecutionProvider available; using CUDA."
   }
 }
 
