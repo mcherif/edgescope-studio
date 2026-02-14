@@ -10,7 +10,7 @@ param(
   [double]$BlurSigma = 8.0,
   [string]$VideoUrl = "https://www.pexels.com/download/video/6517471/",
   [string]$VideoCachePath = "$env:TEMP\\edgescope-bench-6517471.mp4",
-  [switch]$UseCachedVideo,
+  [switch]$ForceDownload,
   [string]$ScriptUrl = "https://raw.githubusercontent.com/mcherif/edgescope-studio/main/scripts/benchmark_video.py",
   [string]$RepoZipUrl = "https://github.com/mcherif/edgescope-studio/archive/refs/heads/main.zip",
   [string]$RepoCacheDir = "$env:TEMP\\edgescope-studio-main",
@@ -49,7 +49,7 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
-if ($UseCachedVideo -and (Test-Path $VideoCachePath)) {
+if ((Test-Path $VideoCachePath) -and (-not $ForceDownload)) {
   $videoPath = $VideoCachePath
   Write-Host "Using cached benchmark clip: $videoPath"
 } else {
