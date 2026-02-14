@@ -127,13 +127,34 @@ function Use-LatestCudaBin {
     }
   }
   if ($versions.Count -eq 0) { return }
-  $latest = $versions | Sort-Object Major, Minor -Descending | Select-Object -First 1
-  $cudaBin = Join-Path $latest.Path "bin"
-  if (Test-Path $cudaBin) {
-    if (-not $env:PATH.Contains($cudaBin)) {
-      $env:PATH = "$cudaBin;$env:PATH"
+  $sorted = $versions | Sort-Object Major, Minor -Descending
+  $selected = $null
+  $selectedVer = $null
+  $fallback = $null
+  $fallbackVer = $null
+  foreach ($v in $sorted) {
+    $cudaBin = Join-Path $v.Path "bin"
+    if (-not (Test-Path $cudaBin)) { continue }
+    if (-not $fallback) {
+      $fallback = $cudaBin
+      $fallbackVer = "v$($v.Major).$($v.Minor)"
     }
-    Write-Host "Using CUDA install: v$($latest.Major).$($latest.Minor) ($cudaBin)"
+    if (Test-Path (Join-Path $cudaBin "cudnn64_9.dll")) {
+      $selected = $cudaBin
+      $selectedVer = "v$($v.Major).$($v.Minor)"
+      break
+    }
+  }
+  if ($selected) {
+    if (-not $env:PATH.Contains($selected)) {
+      $env:PATH = "$selected;$env:PATH"
+    }
+    Write-Host "Using CUDA install: $selectedVer ($selected)"
+  } elseif ($fallback) {
+    if (-not $env:PATH.Contains($fallback)) {
+      $env:PATH = "$fallback;$env:PATH"
+    }
+    Write-Warning "No CUDA bin with cudnn64_9.dll found; using $fallbackVer ($fallback)"
   }
 }
 
