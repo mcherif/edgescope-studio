@@ -9,12 +9,14 @@ Defaults:
 Examples:
   .\repro_video_bench.ps1
   .\repro_video_bench.ps1 -Setup
+  .\repro_video_bench.ps1 -UseVenv
   .\repro_video_bench.ps1 -Legacy
   .\repro_video_bench.ps1 -ForceDownload
   .\repro_video_bench.ps1 -UseLocalScript
 #>
 param(
   [switch]$Setup,
+  [switch]$UseVenv,
   [string]$Device = "cuda",
   [string]$Backend = "dshow",
   [int]$InputSize = 512,
@@ -76,15 +78,19 @@ function Ensure-Python {
 function Resolve-Python([string]$root) {
   $venvDir = Join-Path $root ".venv-video"
   $venvPy = Join-Path $venvDir "Scripts/python.exe"
-  if ($Setup) {
+  if ($Setup -or $UseVenv) {
     Ensure-Python
-    Write-Host "Creating venv: $venvDir"
-    python -m venv $venvDir
-    Write-Host "Installing deps into venv..."
-    & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
-    & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
+    if (-not (Test-Path $venvPy)) {
+      Write-Host "Creating venv: $venvDir"
+      python -m venv $venvDir
+    }
+    if ($Setup) {
+      Write-Host "Installing deps into venv..."
+      & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
+      & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
+    }
   }
-  if (Test-Path $venvPy) {
+  if (($Setup -or $UseVenv) -and (Test-Path $venvPy)) {
     Write-Host "Using venv: $venvDir"
     return $venvPy
   }
