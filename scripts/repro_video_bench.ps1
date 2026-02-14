@@ -28,6 +28,8 @@ param(
   [string]$RepoZipUrl = "https://github.com/mcherif/edgescope-studio/archive/refs/heads/main.zip",
   [string]$RepoCacheDir = "$env:TEMP\\edgescope-studio-main",
   [switch]$UseLocalScript,
+  [switch]$SkipModelDownload,
+  [switch]$ForceCuda,
   [switch]$Legacy
 )
 
@@ -56,11 +58,29 @@ function Ensure-Repo([string]$zipUrl, [string]$cacheDir) {
   return $cacheDir
 }
 
+function Ensure-Model([string]$root) {
+  $modelPath = Join-Path $root "models/rvm_mobilenetv3_fp32.onnx"
+  if (Test-Path $modelPath) { return }
+  if ($SkipModelDownload) {
+    throw "Model missing: $modelPath (use -SkipModelDownload:$false or download models first)"
+  }
+  Write-Host "Downloading RVM model..."
+  python (Join-Path $root "scripts/setup_video.py")
+}
+
+function Has-CudaProvider {
+  $code = "import onnxruntime as ort; print('CUDAExecutionProvider' in ort.get_available_providers())"
+  $result = python -c $code
+  return $result -eq "True"
+}
+
 $repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
 if (-not $repoRoot) {
   $repoRoot = Ensure-Repo $RepoZipUrl $RepoCacheDir
 }
 Set-Location $repoRoot
+
+Ensure-Model $repoRoot
 
 $localBenchPath = Join-Path $repoRoot "benchmarks/6517471-hd_1920_1080_30fps.mp4"
 if ((Test-Path $localBenchPath) -and (-not $ForceDownload)) {
@@ -94,8 +114,17 @@ if ($Legacy) { $alphaPath = "legacy" }
 $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json"
 if ($Legacy) { $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json" }
 
+$deviceEffective = $Device
+if ($Device -eq "cuda" -and -not (Has-CudaProvider)) {
+  if ($ForceCuda) {
+    throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
+  }
+  Write-Warning "CUDAExecutionProvider not available; falling back to CPU for this run."
+  $deviceEffective = "cpu"
+}
+
 Write-Host "Running benchmark..."
-python $scriptPath --device $Device --backend $Backend `
+python $scriptPath --device $deviceEffective --backend $Backend `
   --video $videoPath --video-frame-index 0 --video-frame-count 0 `
   --input-size $InputSize --downsample $Downsample --width $Width --height $Height --duration $Duration `
   --blur --blur-scale $BlurScale --blur-sigma $BlurSigma --comp-mode soft --alpha-path $alphaPath `
