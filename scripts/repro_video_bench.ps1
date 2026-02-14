@@ -235,7 +235,7 @@ if ($SetupNoConda) {
   $cublasBin = Join-Path $sitePackages "nvidia\\cublas\\bin"
   $cudaRtBin = Join-Path $sitePackages "nvidia\\cuda_runtime\\bin"
   foreach ($p in @($cudnnBin, $cublasBin, $cudaRtBin)) {
-    if (Test-Path $p -and (-not $env:PATH.Contains($p))) {
+    if ((Test-Path $p) -and (-not $env:PATH.Contains($p))) {
       $env:PATH = "$p;$env:PATH"
     }
   }
