@@ -111,14 +111,29 @@ function Get-Providers([string]$py) {
   return & $py -c $code
 }
 
-$cudaBase = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA"
-if (Test-Path $cudaBase) {
-  $cudaDirs = Get-ChildItem $cudaBase -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
-  if ($cudaDirs.Count -gt 0) {
-    $cudaBin = Join-Path $cudaDirs[0].FullName "bin"
-    if ((Test-Path $cudaBin) -and (-not $env:PATH.Contains($cudaBin))) {
+function Use-LatestCudaBin {
+  $cudaBase = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA"
+  if (-not (Test-Path $cudaBase)) { return }
+  $cudaDirs = Get-ChildItem $cudaBase -Directory -ErrorAction SilentlyContinue
+  if (-not $cudaDirs) { return }
+  $versions = @()
+  foreach ($d in $cudaDirs) {
+    if ($d.Name -match '^v(\d+)\.(\d+)$') {
+      $versions += [pscustomobject]@{
+        Path = $d.FullName
+        Major = [int]$Matches[1]
+        Minor = [int]$Matches[2]
+      }
+    }
+  }
+  if ($versions.Count -eq 0) { return }
+  $latest = $versions | Sort-Object Major, Minor -Descending | Select-Object -First 1
+  $cudaBin = Join-Path $latest.Path "bin"
+  if (Test-Path $cudaBin) {
+    if (-not $env:PATH.Contains($cudaBin)) {
       $env:PATH = "$cudaBin;$env:PATH"
     }
+    Write-Host "Using CUDA install: v$($latest.Major).$($latest.Minor) ($cudaBin)"
   }
 }
 
@@ -143,6 +158,8 @@ if (-not $repoRoot) {
   $repoRoot = Ensure-Repo $RepoZipUrl $RepoCacheDir
 }
 Set-Location $repoRoot
+
+Use-LatestCudaBin
 
 $condaBin = $null
 if ($env:CONDA_PREFIX) {
