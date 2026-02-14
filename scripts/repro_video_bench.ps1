@@ -74,6 +74,8 @@ function Ensure-Python {
   if (-not $winget) {
     throw "Python not found and winget is unavailable. Install Python 3.10+ and retry."
   }
+  $resp = Read-Host "Install Python 3.11 via winget? (y/N)"
+  if ($resp -notin @("y","Y")) { throw "Aborted Python install." }
   winget install -e --id Python.Python.3.11
 }
 
@@ -84,14 +86,20 @@ function Resolve-Python([string]$root) {
     Ensure-Python
     if (-not (Test-Path $venvPy)) {
       Write-Host "Creating venv: $venvDir"
+      $resp = Read-Host "Create venv at $venvDir? (y/N)"
+      if ($resp -notin @("y","Y")) { throw "Aborted venv creation." }
       python -m venv $venvDir
     }
     if ($Setup -or $SetupNoConda) {
       Write-Host "Installing deps into venv..."
+      $resp = Read-Host "Install Python deps into venv? (y/N)"
+      if ($resp -notin @("y","Y")) { throw "Aborted dependency install." }
       & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
       & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
       if ($SetupNoConda) {
         Write-Host "Installing CUDA runtime/cuDNN wheels (no conda)..."
+        $resp = Read-Host "Install CUDA runtime/cuDNN wheels? (y/N)"
+        if ($resp -notin @("y","Y")) { throw "Aborted CUDA wheel install." }
         & $venvPy -m pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12 2>&1 | Out-Host
       }
     }
@@ -188,6 +196,8 @@ function Get-MissingCudaDlls {
 
 $repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
 if (-not $repoRoot) {
+  $resp = Read-Host "Download repo to $RepoCacheDir? (y/N)"
+  if ($resp -notin @("y","Y")) { throw "Aborted repo download." }
   $repoRoot = Ensure-Repo $RepoZipUrl $RepoCacheDir
 }
 Set-Location $repoRoot
@@ -210,10 +220,10 @@ if ($CudaPath) {
       Write-Warning "CudaPath not found: $trim"
       continue
     }
-    if (-not $env:PATH.Contains($trim)) {
-      $env:PATH = "$trim;$env:PATH"
-    }
+  if (-not $env:PATH.Contains($trim)) {
+    $env:PATH = "$trim;$env:PATH"
   }
+}
 }
 
 $py = Resolve-Python $repoRoot
@@ -243,6 +253,8 @@ if ((Test-Path $localBenchPath) -and (-not $ForceDownload)) {
   $videoDir = Split-Path -Parent $VideoCachePath
   if (-not (Test-Path $videoDir)) { New-Item -ItemType Directory -Path $videoDir | Out-Null }
   Write-Host "Downloading benchmark clip from: $VideoUrl"
+  $resp = Read-Host "Download benchmark clip? (y/N)"
+  if ($resp -notin @("y","Y")) { throw "Aborted video download." }
   Invoke-WebRequest -Uri $VideoUrl -OutFile $VideoCachePath
   $videoPath = $VideoCachePath
 }
@@ -255,6 +267,8 @@ if ($UseLocalScript) {
   $scriptPath = Join-Path $scriptDir "benchmark_video.py"
 } else {
   Write-Host "Fetching benchmark script from: $ScriptUrl"
+  $resp = Read-Host "Download benchmark script? (y/N)"
+  if ($resp -notin @("y","Y")) { throw "Aborted script download." }
   Invoke-WebRequest -Uri $ScriptUrl -OutFile $scriptPath
 }
 
