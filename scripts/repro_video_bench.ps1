@@ -107,7 +107,7 @@ if (Test-Path $cudaBase) {
   $cudaDirs = Get-ChildItem $cudaBase -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
   if ($cudaDirs.Count -gt 0) {
     $cudaBin = Join-Path $cudaDirs[0].FullName "bin"
-    if (Test-Path $cudaBin -and (-not $env:PATH.Contains($cudaBin))) {
+    if ((Test-Path $cudaBin) -and (-not $env:PATH.Contains($cudaBin))) {
       $env:PATH = "$cudaBin;$env:PATH"
     }
   }
