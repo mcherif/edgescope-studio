@@ -9,6 +9,8 @@ param(
   [double]$BlurScale = 0.5,
   [double]$BlurSigma = 8.0,
   [string]$VideoUrl = "https://www.pexels.com/download/video/6517471/",
+  [string]$VideoCachePath = "$env:TEMP\\edgescope-bench-6517471.mp4",
+  [switch]$UseCachedVideo,
   [string]$ScriptUrl = "https://raw.githubusercontent.com/mcherif/edgescope-studio/main/scripts/benchmark_video.py",
   [string]$RepoZipUrl = "https://github.com/mcherif/edgescope-studio/archive/refs/heads/main.zip",
   [string]$RepoCacheDir = "$env:TEMP\\edgescope-studio-main",
@@ -47,7 +49,16 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
-Write-Host "Streaming benchmark clip from: $VideoUrl"
+if ($UseCachedVideo -and (Test-Path $VideoCachePath)) {
+  $videoPath = $VideoCachePath
+  Write-Host "Using cached benchmark clip: $videoPath"
+} else {
+  $videoDir = Split-Path -Parent $VideoCachePath
+  if (-not (Test-Path $videoDir)) { New-Item -ItemType Directory -Path $videoDir | Out-Null }
+  Write-Host "Downloading benchmark clip from: $VideoUrl"
+  Invoke-WebRequest -Uri $VideoUrl -OutFile $VideoCachePath
+  $videoPath = $VideoCachePath
+}
 
 $scriptDir = Join-Path $repoRoot "scripts"
 if (-not (Test-Path $scriptDir)) { New-Item -ItemType Directory -Path $scriptDir | Out-Null }
@@ -68,7 +79,7 @@ if ($Legacy) { $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video
 
 Write-Host "Running benchmark..."
 python $scriptPath --device $Device --backend $Backend `
-  --video $VideoUrl --video-frame-index 0 --video-frame-count 0 `
+  --video $videoPath --video-frame-index 0 --video-frame-count 0 `
   --input-size $InputSize --downsample $Downsample --width $Width --height $Height --duration $Duration `
   --blur --blur-scale $BlurScale --blur-sigma $BlurSigma --comp-mode soft --alpha-path $alphaPath `
   --out $outName
