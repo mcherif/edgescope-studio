@@ -85,32 +85,84 @@ Pipeline overview: Capture -> Preprocess -> ORT RVM -> Alpha Matte -> Compositin
 
 ## Results (frozen config)
 
-**Primary input:** Pexels clip (file input; webcam is secondary due to capture variability)  
-**Settings:** `512 / 0.25 / 720p / backend=dshow / blur_scale=0.5 / blur_sigma=8`
+| Metric | Value |
+|---|---|
+| Input | [Pexels clip (ID 6517471)](https://www.pexels.com/video/a-woman-talking-in-front-of-the-computer-while-drinking-6517471/), 720p file input |
+| Config | `512 / 0.25 / dshow / blur_scale=0.5 / blur_sigma=8` |
+| Throughput (optimized) | FPS mean **39.02** |
+| Latency (optimized) | total p95 **29.96 ms** |
+| Temporal stability (Sobel gradient edges jitter mean) | OFF **0.08246** -> ON **0.06315** (**-23.4%**) |
+| Compositing optimization | comp mean **9.51 -> 5.72 ms**; FPS **32.67 -> 39.02** (**+19.4%**) |
 
-Performance (optimized): FPS mean 39.02, total p95 29.96 ms  
-Temporal stability (Sobel edge jitter mean): OFF 0.08246 -> ON 0.06315 (-23.4%)  
-Compositing win (legacy -> optimized): comp mean 9.51 -> 5.72 ms, FPS 32.67 -> 39.02 (+19.4%)
+File-input benchmarks are not real-time limited (no 30 FPS camera cadence), so FPS can exceed 30 and represents pipeline throughput.
 
-Webcam note: Webcam numbers vary with capture backend and scene motion; see Appendix.
+Webcam note: webcam numbers vary with capture backend and scene motion; see Appendix.
 
-**Repro commands (file input):**
+Repro commands: see `Runtime stacks matter` for file-input throughput commands and `Temporal stability (RVM vs no temporal state)` for temporal jitter commands.
+
+## Reproducibility / Environment
+
+Capture environment provenance for both `venv` and `conda` before comparing benchmark numbers.
+
+This captures:
+- Python version/executable/platform
+- `pip freeze` (and `conda list` when applicable)
+- ONNX Runtime version/device/providers
+- OpenCV version + full build info
+- DLL resolution and loaded-module paths for:
+  `onnxruntime_providers_cuda.dll`, `cudnn64_9.dll`, `cublas64_12.dll`, `cudart64_12.dll`
+
+```powershell
+# Venv runtime snapshot (example path)
+C:\Users\msi\AppData\Local\Temp\edgescope-studio-main\.venv-video\Scripts\python.exe `
+  scripts/capture_runtime_env.py `
+  --model models/rvm_mobilenetv3_fp32.onnx `
+  --out benchmarks/env_venv_runtime.json
+
+# Conda runtime snapshot
+python scripts/capture_runtime_env.py `
+  --model models/rvm_mobilenetv3_fp32.onnx `
+  --out benchmarks/env_conda_runtime.json
+```
+
+Compare:
+- `onnxruntime.providers_available`
+- `session_probe.providers_active`
+- `dlls.*.loaded_module_path`
+
+If DLL loaded-module paths differ between environments, benchmark differences are expected even on the same machine/driver.
+
+## Runtime stacks matter
+
+Same code/model/clip can yield different throughput depending on Python runtime and DLL search order.
+
+| Stack | FPS mean | Infer mean (ms) | Comp mean (ms) | Total mean (ms) |
+|---|---:|---:|---:|---:|
+| Venv stack (`ab_venv.json`) | 46.86 | 16.09 | 4.43 | 21.32 |
+| Conda stack (`ab_conda_forced_dll_order.json`) | 42.63 | 17.04 | 4.83 | 23.44 |
+| Delta (venv - conda) | +4.23 (+9.9%) | -0.95 | -0.40 | -2.12 |
+
+Artifacts:
+- `benchmarks/ab_venv.json`
+- `benchmarks/ab_conda_forced_dll_order.json`
+- `benchmarks/env_venv_runtime.json`
+- `benchmarks/env_conda_runtime.json`
+
+Notes:
+- `ab_*.json` are benchmark outputs from `scripts/benchmark_video.py` (same flags, different environments).
+- `env_*.json` are runtime captures from `scripts/capture_runtime_env.py`.
+
+### File-input repro command (primary)
+
 ```bash
-# Performance (optimized)
+# Optimized compositing path
 python scripts/benchmark_video.py --device cuda \
   --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
   --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
   --blur --blur-scale 0.5 --blur-sigma 8 --comp-mode soft --alpha-path optimized --backend dshow \
   --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json
 
-# Temporal stability (Sobel edge jitter)
-python scripts/compare_temporal.py --device cuda --backend dshow --input-size 512 --downsample 0.25 \
-  --width 1280 --height 720 --duration 30 --edge-mode grad --edge-grad-thresh 0.02 \
-  --video benchmarks/6517471-hd_1920_1080_30fps.mp4 \
-  --out-on benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json \
-  --out-off benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json
-
-# Compositing legacy vs optimized
+# Legacy compositing path (A/B against optimized)
 python scripts/benchmark_video.py --device cuda \
   --video benchmarks/6517471-hd_1920_1080_30fps.mp4 --video-frame-index 0 --video-frame-count 0 \
   --input-size 512 --downsample 0.25 --width 1280 --height 720 --duration 30 \
@@ -118,10 +170,34 @@ python scripts/benchmark_video.py --device cuda \
   --out benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json
 ```
 
-Produces: `benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_opt.json`,
-`benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json`,
-`benchmarks/temporal_on_512_ds025_720p_dshow_video6517471_grad.json`,
-`benchmarks/temporal_off_512_ds025_720p_dshow_video6517471_grad.json`.
+### Runtime stack evidence (Windows)
+
+Captured with:
+- `benchmarks/env_venv_runtime.json`
+- `benchmarks/env_conda_runtime.json`
+
+Control checks (both environments):
+- `onnxruntime==1.24.1`
+- `providers_active=["CUDAExecutionProvider","CPUExecutionProvider"]`
+- Python executable differs by environment (venv vs conda)
+
+Both environments report GPU execution active, but CUDA runtime DLLs are loaded from different locations:
+
+| DLL | venv (pip CUDA wheels) | conda/system CUDA |
+|---|---|---|
+| `onnxruntime_providers_cuda.dll` | `...\.venv-video\Lib\site-packages\onnxruntime\capi\...` | `...\miniconda3\envs\edgescope-cuda\Lib\site-packages\onnxruntime\capi\...` |
+| `cudnn64_9.dll` | `...\.venv-video\Lib\site-packages\nvidia\cudnn\bin\...` | `...\miniconda3\envs\edgescope-cuda\Library\bin\...` |
+| `cublas64_12.dll` | `...\.venv-video\Lib\site-packages\nvidia\cublas\bin\...` | `...\miniconda3\envs\edgescope-cuda\Library\bin\...` |
+| `cudart64_12.dll` | `...\.venv-video\Lib\site-packages\nvidia\cuda_runtime\bin\...` | `...\CUDA\v12.1\bin\...` |
+
+Conclusion: same model + same benchmark flags can yield different latency distributions because ORT loads different CUDA/cuDNN/cuBLAS runtime DLLs depending on environment and DLL search order (PATH), affecting kernel selection and scheduling.
+
+Repro:
+1. Run `python scripts/capture_runtime_env.py --model models/rvm_mobilenetv3_fp32.onnx --out ...` from each environment.
+2. Compare `dlls.*.loaded_module_path` and `session_probe.providers_active`.
+3. Run the same `scripts/benchmark_video.py` command in both environments and compare output JSONs.
+
+One-command repro entry point: `scripts/repro_video_bench.ps1` (clean PATH mode enabled by default).
 
 **Repro commands (webcam, secondary):**
 ```bash
@@ -203,10 +279,10 @@ Notes: models are already loaded; numbers exclude one-time init.
 Jitter metric: mean(abs(alpha_t - alpha_{t-1})) over frames (lower is better).
 Jitter measures frame-to-frame matte instability: mean absolute change in alpha between consecutive frames.
 Reported for all pixels and for edge regions (alpha in [0.1, 0.9] or |grad alpha| > 0.02).
-Attribution: Pexels video "A woman talking in front of the computer while drinking" (ID 6517471). Downloaded locally for benchmarking; not redistributed.
-Primary edge definition: Sobel gradient magnitude (threshold 0.02). Auxiliary: alpha band 0.1-0.9.
-We use Sobel(alpha) magnitude > 0.02 as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
-Headline numbers are in the Benchmark snapshot (frozen config) above.
+Attribution: [Pexels video "A woman talking in front of the computer while drinking" (ID 6517471)](https://www.pexels.com/video/a-woman-talking-in-front-of-the-computer-while-drinking-6517471/). Downloaded locally for benchmarking; not redistributed.
+Primary edge definition: Sobel gradient edges (`--edge-mode grad`, threshold `0.02`). Auxiliary: alpha band `0.1-0.9`.
+We use `|Sobel(alpha)| > 0.02` as the edge set; this was chosen to produce a stable edge fraction (~6-8%) on 720p portrait clips.
+Headline numbers are in the Results (frozen config) table above.
 
 ### How to reproduce (temporal jitter)
 ```bash

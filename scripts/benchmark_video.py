@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -22,6 +23,7 @@ from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
+from importlib import metadata as importlib_metadata
 
 try:
     from edgescope.video.compositing import BackgroundBlur
@@ -97,6 +99,15 @@ def camera_health_check(cap: cv2.VideoCapture) -> None:
         last = frame
     if not got_frame:
         raise SystemExit("ERROR: camera appears inactive/off; benchmark invalid.")
+
+
+def get_pkg_version(name: str) -> Optional[str]:
+    try:
+        return importlib_metadata.version(name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -271,6 +282,31 @@ def main() -> int:
             alpha_feather=args.alpha_feather,
         )
 
+    runtime_stack = {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "opencv": cv2.__version__,
+        "numpy": np.__version__,
+        "onnxruntime": get_pkg_version("onnxruntime") or get_pkg_version("onnxruntime-gpu"),
+        "providers_available": pipeline.session.get_providers(),
+        "providers_active": pipeline.session.get_providers(),
+        "packages": {
+            "onnxruntime-gpu": get_pkg_version("onnxruntime-gpu"),
+            "nvidia-cuda-runtime-cu12": get_pkg_version("nvidia-cuda-runtime-cu12"),
+            "nvidia-cublas-cu12": get_pkg_version("nvidia-cublas-cu12"),
+            "nvidia-cufft-cu12": get_pkg_version("nvidia-cufft-cu12"),
+            "nvidia-cuda-nvrtc-cu12": get_pkg_version("nvidia-cuda-nvrtc-cu12"),
+            "nvidia-cudnn-cu12": get_pkg_version("nvidia-cudnn-cu12"),
+            "nvidia-nvjitlink-cu12": get_pkg_version("nvidia-nvjitlink-cu12"),
+        },
+    }
+    print(
+        "Runtime: "
+        f"python={runtime_stack['python']} "
+        f"onnxruntime={runtime_stack['onnxruntime']} "
+        f"providers={','.join(runtime_stack['providers_active'])}"
+    )
+
     # Timings
     cap_ms: List[float] = []
     infer_ms: List[float] = []
@@ -438,6 +474,7 @@ def main() -> int:
             "warmup_frames": args.warmup_frames,
             "duration_s": args.duration,
         },
+        "runtime": runtime_stack,
         "results": {
             "frames": frames,
             "elapsed_s": float(elapsed),
