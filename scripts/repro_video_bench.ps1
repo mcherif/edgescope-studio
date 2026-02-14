@@ -49,7 +49,11 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
-if ((Test-Path $VideoCachePath) -and (-not $ForceDownload)) {
+$localBenchPath = Join-Path $repoRoot "benchmarks/6517471-hd_1920_1080_30fps.mp4"
+if ((Test-Path $localBenchPath) -and (-not $ForceDownload)) {
+  $videoPath = $localBenchPath
+  Write-Host "Using local benchmark clip: $videoPath"
+} elseif ((Test-Path $VideoCachePath) -and (-not $ForceDownload)) {
   $videoPath = $VideoCachePath
   Write-Host "Using cached benchmark clip: $videoPath"
 } else {
