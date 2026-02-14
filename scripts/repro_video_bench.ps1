@@ -4,14 +4,17 @@ One-click repro for the frozen video benchmark.
 Defaults:
 - Uses local benchmarks clip if present, then temp cache, else downloads.
 - Fetches benchmark script from GitHub main (use -UseLocalScript to override).
+- Uses a local venv if present; run -Setup to create one and install deps.
 
 Examples:
   .\repro_video_bench.ps1
+  .\repro_video_bench.ps1 -Setup
   .\repro_video_bench.ps1 -Legacy
   .\repro_video_bench.ps1 -ForceDownload
   .\repro_video_bench.ps1 -UseLocalScript
 #>
 param(
+  [switch]$Setup,
   [string]$Device = "cuda",
   [string]$Backend = "dshow",
   [int]$InputSize = 512,
@@ -58,19 +61,45 @@ function Ensure-Repo([string]$zipUrl, [string]$cacheDir) {
   return $cacheDir
 }
 
-function Ensure-Model([string]$root) {
+function Ensure-Python {
+  $py = Get-Command python -ErrorAction SilentlyContinue
+  if ($py) { return }
+  Write-Host "Python not found. Attempting install via winget..."
+  $winget = Get-Command winget -ErrorAction SilentlyContinue
+  if (-not $winget) {
+    throw "Python not found and winget is unavailable. Install Python 3.10+ and retry."
+  }
+  winget install -e --id Python.Python.3.11
+}
+
+function Ensure-Venv([string]$root) {
+  $venvDir = Join-Path $root ".venv-video"
+  $venvPy = Join-Path $venvDir "Scripts/python.exe"
+  if ($Setup -or -not (Test-Path $venvPy)) {
+    Ensure-Python
+    Write-Host "Creating venv: $venvDir"
+    python -m venv $venvDir
+    Write-Host "Installing deps into venv..."
+    & $venvPy -m pip install --upgrade pip
+    & $venvPy -m pip install onnxruntime-gpu opencv-python numpy
+  }
+  if (Test-Path $venvPy) { return $venvPy }
+  return "python"
+}
+
+function Ensure-Model([string]$root, [string]$py) {
   $modelPath = Join-Path $root "models/rvm_mobilenetv3_fp32.onnx"
   if (Test-Path $modelPath) { return }
   if ($SkipModelDownload) {
     throw "Model missing: $modelPath (use -SkipModelDownload:$false or download models first)"
   }
   Write-Host "Downloading RVM model..."
-  python (Join-Path $root "scripts/setup_video.py")
+  & $py (Join-Path $root "scripts/setup_video.py")
 }
 
-function Get-Providers {
+function Get-Providers([string]$py) {
   $code = "import onnxruntime as ort; print(','.join(ort.get_available_providers()))"
-  return python -c $code
+  return & $py -c $code
 }
 
 $repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
@@ -79,7 +108,8 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
-Ensure-Model $repoRoot
+$py = Ensure-Venv $repoRoot
+Ensure-Model $repoRoot $py
 
 $localBenchPath = Join-Path $repoRoot "benchmarks/6517471-hd_1920_1080_30fps.mp4"
 if ((Test-Path $localBenchPath) -and (-not $ForceDownload)) {
@@ -115,7 +145,7 @@ if ($Legacy) { $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video
 
 $deviceEffective = $Device
 if ($Device -eq "cuda") {
-  $providers = Get-Providers
+  $providers = Get-Providers $py
   Write-Host "ONNX Runtime providers: $providers"
   $hasCuda = $providers -match "CUDAExecutionProvider"
   if (-not $hasCuda) {
@@ -130,7 +160,7 @@ if ($Device -eq "cuda") {
 }
 
 Write-Host "Running benchmark..."
-python $scriptPath --device $deviceEffective --backend $Backend `
+& $py $scriptPath --device $deviceEffective --backend $Backend `
   --video $videoPath --video-frame-index 0 --video-frame-count 0 `
   --input-size $InputSize --downsample $Downsample --width $Width --height $Height --duration $Duration `
   --blur --blur-scale $BlurScale --blur-sigma $BlurSigma --comp-mode soft --alpha-path $alphaPath `
