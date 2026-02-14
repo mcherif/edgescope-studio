@@ -68,10 +68,9 @@ function Ensure-Model([string]$root) {
   python (Join-Path $root "scripts/setup_video.py")
 }
 
-function Has-CudaProvider {
-  $code = "import onnxruntime as ort; print('CUDAExecutionProvider' in ort.get_available_providers())"
-  $result = python -c $code
-  return $result -eq "True"
+function Get-Providers {
+  $code = "import onnxruntime as ort; print(','.join(ort.get_available_providers()))"
+  return python -c $code
 }
 
 $repoRoot = Find-RepoRoot (Split-Path -Parent $PSScriptRoot)
@@ -115,12 +114,19 @@ $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s
 if ($Legacy) { $outName = "benchmarks/rvm_512_ds025_720p_blur_soft_profile_video6517471_full10s_legacy.json" }
 
 $deviceEffective = $Device
-if ($Device -eq "cuda" -and -not (Has-CudaProvider)) {
-  if ($ForceCuda) {
-    throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
+if ($Device -eq "cuda") {
+  $providers = Get-Providers
+  Write-Host "ONNX Runtime providers: $providers"
+  $hasCuda = $providers -match "CUDAExecutionProvider"
+  if (-not $hasCuda) {
+    if ($ForceCuda) {
+      throw "CUDAExecutionProvider not available; install CUDA-enabled onnxruntime or use -Device cpu."
+    }
+    Write-Warning "CUDAExecutionProvider not available; falling back to CPU for this run."
+    $deviceEffective = "cpu"
+  } else {
+    Write-Host "CUDAExecutionProvider available; using CUDA."
   }
-  Write-Warning "CUDAExecutionProvider not available; falling back to CPU for this run."
-  $deviceEffective = "cpu"
 }
 
 Write-Host "Running benchmark..."
