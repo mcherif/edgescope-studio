@@ -72,10 +72,10 @@ function Ensure-Python {
   winget install -e --id Python.Python.3.11
 }
 
-function Ensure-Venv([string]$root) {
+function Resolve-Python([string]$root) {
   $venvDir = Join-Path $root ".venv-video"
   $venvPy = Join-Path $venvDir "Scripts/python.exe"
-  if ($Setup -or -not (Test-Path $venvPy)) {
+  if ($Setup) {
     Ensure-Python
     Write-Host "Creating venv: $venvDir"
     python -m venv $venvDir
@@ -83,8 +83,16 @@ function Ensure-Venv([string]$root) {
     & $venvPy -m pip install --upgrade pip 2>&1 | Out-Host
     & $venvPy -m pip install onnxruntime-gpu opencv-python numpy 2>&1 | Out-Host
   }
-  if (Test-Path $venvPy) { return $venvPy }
-  return "python"
+  if (Test-Path $venvPy) {
+    Write-Host "Using venv: $venvDir"
+    return $venvPy
+  }
+  $py = Get-Command python -ErrorAction SilentlyContinue
+  if (-not $py) {
+    Ensure-Python
+    $py = Get-Command python -ErrorAction SilentlyContinue
+  }
+  return $py.Source
 }
 
 function Ensure-Model([string]$root, [string]$py) {
@@ -135,7 +143,7 @@ if (-not $repoRoot) {
 }
 Set-Location $repoRoot
 
-$py = Ensure-Venv $repoRoot
+$py = Resolve-Python $repoRoot
 Write-Host "Using Python: $py"
 Ensure-Model $repoRoot $py
 
