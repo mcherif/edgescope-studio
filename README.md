@@ -1,6 +1,6 @@
 [![Video CI](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml/badge.svg?branch=main)](https://github.com/mcherif/edgescope-studio/actions/workflows/video.yml)
 
-**EdgeScope Studio** is a **local-first** computer vision lab for prototyping **image and video** pipelines on your own machine (offline).
+**EdgeScope Studio** is a **local-first** computer vision lab for prototyping **image and video** pipelines on your own machine (offline). It is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
 It has two modes:
 
@@ -15,8 +15,6 @@ The core idea:
 Video mode uses RVM to produce a temporally-stable alpha matte per frame; no detector/SAM in the loop.
 
 Why RVM vs detect+SAM for video: RVM is video-native and keeps recurrent state, so edges stay stable frame-to-frame and inference is faster than running detector + SAM on every frame.
-
-This is designed as a **general CV tool**, but with a strong focus on **on-device and privacy-preserving use cases** (e.g. ergonomics / digital wellbeing, industrial inspection, etc.).
 
 For real-time portrait effects we use **Robust Video Matting ([RVM](#acronym-rvm))** (video-native, recurrent temporal states).
 For general object segmentation in still images we use **detect -> segment ([RTMDet](#acronym-rtmdet) + [SAM](#acronym-sam))**.
